@@ -5,6 +5,10 @@ import numpy as np
 data_path = 'data/'
 volume_file = data_path + 'volume.csv'
 travel_time_file = data_path + 'travel_time.csv'
+lane_direction_file = data_path + 'lane_direction.csv'
+
+n_daily_time_tag = 288     # 按5分钟划分一天的时间，可分为288个时段
+n_lanes_max = 20    # 最多不超过20个车道
 
 
 def ssid_volume():
@@ -19,7 +23,7 @@ def ssid_volume():
             if ssid in ssid_dict:
                 ssid_dict[ssid][cdbh] += volume
             else:
-                ssid_dict[ssid] = np.zeros(20)
+                ssid_dict[ssid] = np.zeros(n_lanes_max)
                 ssid_dict[ssid][cdbh] = volume
         n_ssid = len(ssid_dict)
         print('Num of SSID =', n_ssid)
@@ -29,7 +33,7 @@ def ssid_volume():
         for item in ssid_list:
             cnt += 1
             v_sum = np.sum(item[1])
-            print('%5.2f %20s %10.0f %10.2f' % (float(cnt) / n_ssid, item[0], v_sum, v_sum / 288))
+            print('%5.2f %20s %10.0f %10.2f' % (float(cnt) / n_ssid, item[0], v_sum, v_sum / n_daily_time_tag))
 
 
 def roadid_traveltime():
@@ -65,6 +69,64 @@ def roadid_traveltime():
             cnt += 1
             print('%5.2f %10d %15.2f %15.2f' % (float(cnt)/n_road, item[0], item[1]['tt'], item[1]['dist']))
 
-ssid_volume()
-roadid_traveltime()
+
+def __time_2_tag(starttime):
+    hms = starttime.split(' ')
+    if len(hms) == 1:   # starttime = "2016/12/15"，表示凌晨0点
+        return 0
+    h, m, s = hms[1].split(':')
+    return int(int(h) * 12 + int(m) / 5)
+
+
+def direction_volume(ssid):
+    print("****************SSID = " + ssid + "****************")
+    dir_lane_dict = {}  # { "由东向西": [1, 2, 3, 4（车道编号）] }
+    with open(lane_direction_file) as f:
+        reader = csv.reader(f)
+        ld_dat = list(reader)[2:]
+        for row in ld_dat:
+            if row[0] == ssid:
+                direction = row[2]
+                lane = int(row[1])
+                if direction in dir_lane_dict:
+                    dir_lane_dict[direction].append(lane)
+                else:
+                    dir_lane_dict[direction] = [lane]
+
+    lane_dir_list = [''] * n_lanes_max  # ['', '由东向西'（下标1对应1号车道）, '由东向西', ... ] （方便反向查询）
+    for key in dir_lane_dict.keys():
+        for lane in dir_lane_dict[key]:
+            lane_dir_list[lane] = key
+
+    dir_vol_dict = {}   # { "由东向西": [0, 0, 22, 37, 0, 14, ...（下标0对应着0:00~0:05的车流量）] }
+    for key in dir_lane_dict.keys():
+        dir_vol_dict[key] = np.zeros(n_daily_time_tag)
+
+    with open(volume_file) as f:
+        reader = csv.reader(f)
+        v_dat = list(reader)[1:]
+        for row in v_dat:
+            if row[0] == ssid:
+                lane = int(row[1])
+                direction = lane_dir_list[lane]
+                vol = int(row[-1])
+                start_time = row[2]
+                time_tag = __time_2_tag(start_time)
+                dir_vol_dict[direction][time_tag] += vol
+
+    for direction in dir_vol_dict.keys():
+        print("========== " + direction + " ==========\nVolume Sequence: ")
+        vol_seq = dir_vol_dict[direction]  # volume sequence
+        print(vol_seq)
+        print("Max_vol: %5.2f%5sMin_vol: %5.2f%5sAvg_vol: %5.2f" %
+              (np.max(vol_seq), '', np.min(vol_seq), '', np.mean(vol_seq)))
+
+
+# ssid_volume()
+# roadid_traveltime()
+
+direction_volume("HK-173")
+# print(__time_2_tag("2016/12/15 1:20:00"))
+
+direction_volume("HK-92")
 
