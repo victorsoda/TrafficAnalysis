@@ -1,11 +1,6 @@
 import csv
 import numpy as np
-
-
-data_path = 'data/'
-volume_file = data_path + 'volume.csv'
-travel_time_file = data_path + 'travel_time.csv'
-lane_direction_file = data_path + 'lane_direction.csv'
+from paras import *
 
 n_daily_time_tag = 288     # 按5分钟划分一天的时间，可分为288个时段
 n_lanes_max = 20    # 最多不超过20个车道
@@ -78,8 +73,14 @@ def __time_2_tag(starttime):
     return int(int(h) * 12 + int(m) / 5)
 
 
-def direction_volume(ssid):
-    print("****************SSID = " + ssid + "****************")
+def direction_volume(ssid, to_print='all'):
+    """
+    统计目标路口每5分钟内各方向的车流量。
+    :param ssid: 目标路口
+    :param to_print: 打印选项，'each'：各方向分别打印，'sum'：只打印各方向总和，'all'：上述都打印，'none'：都不打印
+    :return: dir_vol_dict：各方向的车流量序列（字典格式）, vol_sum：各方向车流量总和的序列（列表格式）
+    """
+    print("**************** SSID = " + ssid + " ****************")
     dir_lane_dict = {}  # { "由东向西": [1, 2, 3, 4（车道编号）] }
     with open(lane_direction_file) as f:
         reader = csv.reader(f)
@@ -114,19 +115,67 @@ def direction_volume(ssid):
                 time_tag = __time_2_tag(start_time)
                 dir_vol_dict[direction][time_tag] += vol
 
+    vol_sum = np.zeros(n_daily_time_tag)
+    excluder = 0    # 用于排除凌晨车流很小的时段
     for direction in dir_vol_dict.keys():
-        print("========== " + direction + " ==========\nVolume Sequence: ")
         vol_seq = dir_vol_dict[direction]  # volume sequence
-        print(vol_seq)
-        print("Max_vol: %5.2f%5sMin_vol: %5.2f%5sAvg_vol: %5.2f" %
-              (np.max(vol_seq), '', np.min(vol_seq), '', np.mean(vol_seq)))
+        vol_sum += vol_seq
+        if to_print == 'all' or to_print == 'each':
+            print("========== " + direction + " ==========")
+            print("Volume Sequence: ", vol_seq)
+            print("Max_vol: %5.2f%5sMin_vol: %5.2f%5sAvg_vol: %5.2f%5sMedian_vol: %5.2f" %
+                  (np.max(vol_seq), '', np.min(vol_seq), '', np.mean(vol_seq[excluder:]), '', np.median(vol_seq[excluder:])))
+    if to_print == 'all' or to_print == 'sum':
+        print("========== 各方向总计 ==========")
+        print("Volume Sequence: ", vol_sum)
+        print("Max_vol: %5.2f%5sMin_vol: %5.2f%5sAvg_vol: %5.2f%5sMedian_vol: %5.2f" %
+              (np.max(vol_sum), '', np.min(vol_sum), '', np.mean(vol_sum[excluder:]), '', np.median(vol_sum[excluder:])))
+    return dir_vol_dict, vol_sum
+
+
+def make_origin_data():
+
+    c_ssid = "HK-173"   # cause_ssid
+    e_ssid = "HK-92"    # effect_ssid
+
+    c_dv_dict, _ = direction_volume(c_ssid, 'each')  # cause_direction_volume_dict
+    __, e_sum = direction_volume(e_ssid, 'sum')  # effect_volume_sum
+
+    c_thres = 30
+    e_thres = 120
+
+    origin_data = []
+    last_line = []
+    for time_tag in range(n_daily_time_tag):
+        line = list()
+        line.append(time_tag)
+        line.append(int(e_sum[time_tag] > e_thres))
+        for direction in c_dv_dict.keys():
+            line.append(int(c_dv_dict[direction][time_tag] > c_thres))
+        if time_tag == 0 or line[1:] != last_line[1:]:
+            origin_data.append(line)
+        last_line = line
+
+    with open(origin_data_file, 'w') as f:
+        header = 'Time_Tag,F_Status'
+        for direction in c_dv_dict.keys():
+            header += ',' + c_ssid + '-' + direction
+        header += '\n'
+        f.write(header)
+        for line in origin_data:
+            f.write(str(line[0]))
+            for item in line[1:]:
+                f.write(',' + str(item))
+            f.write('\n')
+
 
 
 # ssid_volume()
 # roadid_traveltime()
-
-direction_volume("HK-173")
 # print(__time_2_tag("2016/12/15 1:20:00"))
 
-direction_volume("HK-92")
+make_origin_data()
+
+
+
 
