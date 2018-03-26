@@ -1,21 +1,19 @@
 import pprint
+import numpy as np
 
 data_path = 'data/'
 volume_file = data_path + 'volume.csv'
 travel_time_file = data_path + 'travel_time.csv'
 lane_direction_file = data_path + 'lane_direction.csv'
-origin_data_file = data_path + 'origin_data.csv'    # 生成的文件
+origin_data_file = data_path + 'origin_data.csv'    # 生成的初始数据文件
+door_data_file = data_path + 'door_data.csv'    # 使用源代码开门视频的create_examples输出的data，验证pursuit的正确性
+example_data_file = data_path + 'example_data.txt'  # create_examples生成的文件
+
 
 pp = pprint.PrettyPrinter()
 
-# a = {1, 2, 3}
-# b = list(a)
-# print(sorted(b))
 
-# a = [1, 0, 1]
-# b = [0, 0, 0]
-# print(any(b))
-# for i in range(len(a)):
-#     a[i] = a[i] | b[i]
-# print(a)
-
+# a = np.array([1, 3, 7])
+# b = [0, 1]
+# print(np.sum(b))
+# print(a[[x for x in b]])

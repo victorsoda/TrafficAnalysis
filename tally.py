@@ -1,5 +1,4 @@
 import csv
-import numpy as np
 from paras import *
 
 n_daily_time_tag = 288     # 按5分钟划分一天的时间，可分为288个时段
@@ -141,7 +140,7 @@ def make_origin_data():
     c_dv_dict, _ = direction_volume(c_ssid, 'each')  # cause_direction_volume_dict
     __, e_sum = direction_volume(e_ssid, 'sum')  # effect_volume_sum
 
-    c_thres = 30
+    c_thres = 30    # TODO: 调整参数
     e_thres = 120
 
     origin_data = []
