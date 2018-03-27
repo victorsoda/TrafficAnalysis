@@ -72,7 +72,7 @@ def __time_2_tag(starttime):
     return int(int(h) * 12 + int(m) / 5)
 
 
-def direction_volume(ssid, to_print='all'):
+def direction_volume(ssid, to_print='none'):
     """
     统计目标路口每5分钟内各方向的车流量。
     :param ssid: 目标路口
@@ -121,7 +121,8 @@ def direction_volume(ssid, to_print='all'):
         vol_sum += vol_seq
         if to_print == 'all' or to_print == 'each':
             print("========== " + direction + " ==========")
-            print("Volume Sequence: ", vol_seq)
+            print("Volume Sequence: ")
+            print(vol_seq)
             print("Max_vol: %5.2f%5sMin_vol: %5.2f%5sAvg_vol: %5.2f%5sMedian_vol: %5.2f" %
                   (np.max(vol_seq), '', np.min(vol_seq), '', np.mean(vol_seq[excluder:]), '', np.median(vol_seq[excluder:])))
     if to_print == 'all' or to_print == 'sum':
@@ -132,16 +133,29 @@ def direction_volume(ssid, to_print='all'):
     return dir_vol_dict, vol_sum
 
 
-def make_origin_data():
+def make_origin_data(c_ssid, e_ssid, c_thres=None, e_thres=None):
+    """
+    生成每一行为 “time | fluent | actions” 格式的 origin_data.csv，保证相邻两行的各对应值不完全相同
+    :param c_ssid: cause_ssid，作为“因”的路口id
+    :param e_ssid: effect_ssid，作为“果”的路口id
+    :param c_thres: “因”路口单一方向车流量的阈值，大于c_thres则Action=1，否则为0
+    :param e_thres: “果”路口总车流量的阈值，大于e_thres则Fluent=1，否则为0 
+    :return: 
+    """
+    # TODO: 1. 可能需要考虑让Action、Fluent增加为0, 1, 2三种取值
+    # TODO: 2. 考虑使用最新的VIP数据，如何更好地定义Action
 
-    c_ssid = "HK-173"   # cause_ssid
-    e_ssid = "HK-92"    # effect_ssid
+    c_dv_dict, _ = direction_volume(c_ssid)  # cause_direction_volume_dict
+    __, e_sum = direction_volume(e_ssid)  # effect_volume_sum
 
-    c_dv_dict, _ = direction_volume(c_ssid, 'each')  # cause_direction_volume_dict
-    __, e_sum = direction_volume(e_ssid, 'sum')  # effect_volume_sum
-
-    c_thres = 30    # TODO: 调整参数
-    e_thres = 120
+    if c_thres is None:
+        dv = []
+        for value in c_dv_dict.values():
+            dv.append(value)
+        c_thres = np.int64(np.mean(np.array(dv)) + 0.5)  # 四舍五入
+    if e_thres is None:
+        e_thres = np.int64(np.mean(np.array(e_sum)) + 0.5)
+    print('c_thres =', c_thres, '\te_thres =', e_thres)
 
     origin_data = []
     last_line = []
@@ -168,12 +182,16 @@ def make_origin_data():
             f.write('\n')
 
 
-
 # ssid_volume()
 # roadid_traveltime()
 # print(__time_2_tag("2016/12/15 1:20:00"))
 
-make_origin_data()
+c_thres = 30    # TODO: 调整参数
+e_thres = 120   # TODO: 改进为：根据路口和拓扑（roadid_traveltime），自动生成阈值参数
+
+
+# TODO: 选取更多路口组合做实验
+make_origin_data(c_ssid="HK-173", e_ssid="HK-92", c_thres=c_thres, e_thres=e_thres)
 
 
 

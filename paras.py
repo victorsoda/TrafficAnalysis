@@ -12,8 +12,10 @@ example_data_file = data_path + 'example_data.txt'  # create_examples生成的�
 
 pp = pprint.PrettyPrinter()
 
+# a = np.array([[1, 3, 7], [2, 2, 3]])
+# b = np.mean(a)
+# print(b, type(b))
 
-# a = np.array([1, 3, 7])
 # b = [0, 1]
 # print(np.sum(b))
 # print(a[[x for x in b]])

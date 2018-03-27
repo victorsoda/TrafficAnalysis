@@ -1,6 +1,7 @@
 from paras import *
-import csv
 from create_examples import create_examples_with_prev_fluent
+import csv
+import matplotlib.pyplot as plt
 
 
 def __tabulate(data, actions):  # 统计data（视频分片集）中每种actions组合出现的次数
@@ -57,15 +58,15 @@ def pursuit(data, n_iterations=20, output_types=None):
         h_action = tmp * 4
         stored_h[:, action_index] = np.multiply(h_fluent, h_action)
         stored_h[:, action_index] /= np.sum(stored_h[:, action_index])
-    # print("stored_f: \n", stored_f)
-    # print("stored_h: \n", stored_h)     # OK
+    print("stored_f: \n", stored_f)
+    print("stored_h: \n", stored_h)     # OK
     # PURSUIT LOOP
     for iteration in range(n_iterations):
-        print('iteration =', iteration)
         next_best_action = 0
         next_best_action_score = 0.0
         next_best_output = 0
         next_best_f = []
+        # 双重循环output_type（4中ΔF）、action_index（多种A_i），即遍历每种ΔF--A_i组合，找出信息增益最大的一组
         for output_type in output_types:    # 分别对应ΔF为0->0，1->0，0->1，1->1
             indices10 = 2 * output_type
             indices11 = 2 * output_type + 1
@@ -78,13 +79,13 @@ def pursuit(data, n_iterations=20, output_types=None):
                     if best_actions[i] == action_index and best_output[i] == output_type:
                         is_redundant = True
                 if not is_redundant:
-                    # 该动作对应的真实分布f
+                    # 该动作Ai对应的真实分布f = [f0, f1, f2, f3]
                     f = stored_f[:, action_index]
                     sum00 = np.sum(f[[x for x in indices00]])
                     sum01 = np.sum(f[[x for x in indices01]])
                     f = [sum00, sum01, f[indices10], f[indices11]]
                     f /= np.sum(f)
-                    # 当前模型的分布
+                    # 该动作Ai对应的当前模型的分布h = [h0, h1, h2, h3]
                     h = stored_h[:, action_index]
                     sum00 = np.sum(h[[x for x in indices00]])
                     sum01 = np.sum(h[[x for x in indices01]])
@@ -104,7 +105,7 @@ def pursuit(data, n_iterations=20, output_types=None):
                         next_best_f = f
         if next_best_action == 0:   # then no action was found
             break
-        # 记录选中的最佳action（info gain最高）
+        # 记录选中的最佳output_type——action组合（info gain最高）
         best_output.append(next_best_output)
         best_actions.append(next_best_action)
         best_action_score.append(next_best_action_score)
@@ -123,40 +124,75 @@ def pursuit(data, n_iterations=20, output_types=None):
         tmp_sum = np.sum(stored_h[next_indices01, next_best_action])
         stored_h[next_indices01, next_best_action] *= f[1] / tmp_sum
         stored_h[:, next_best_action] /= np.sum(stored_h[:, next_best_action])
+        print('iteration =', iteration)
+
     # OUTPUT
     output = [best_output, best_actions, best_action_score, causal_effect]
     for item in output:
         del item[0]
 
-    return output    # TODO
-
-# new_data = create_examples_with_prev_fluent()
-# with open(example_data_file, 'w') as f:
-#     for i in range(len(new_data)):
-#         for j in range(len(new_data[0])):
-#             f.write('\t%d' % new_data[i][j])
-#         f.write('\n')
+    return output
 
 
-with open(door_data_file) as fil:
-    reader = csv.reader(fil)
-    data = list(reader)
-    n_rows, n_cols = np.array(data).shape
-    new_data = [[int(x[i]) for i in range(n_cols)] for x in data]
+def __plot_output(result, title):
+    _, n_iterations = np.array(result).shape
+    info = result[2]
+    causal_effect = result[3]
+    x = np.array(range(0, n_iterations))
+    right_sub = [i for i in range(n_iterations) if causal_effect[i] > 0.0]
+    wrong_sub = [i for i in range(n_iterations) if causal_effect[i] <= 0.0]
+    plt.plot(x, info)
+    plt.plot(x[right_sub], info[right_sub], 'go', linewidth=3, markersize=10)
+    plt.plot(x[wrong_sub], info[wrong_sub], 'rx', linewidth=3, markersize=10)
+    plt.xlabel('Iteration Number')
+    plt.ylabel('Information Gain')
+    plt.title(title)
+    plt.legend()
+    plt.show()
 
-    print(np.array(new_data).shape)
-    result = pursuit(new_data, 40)
+
+def __print_result(result, title):
     print("best output:")
-    print(result[0], ', len = ', len(result[0]))
+    print(result[0], ', len =', len(result[0]))
     print("best actions:")
     print(result[1])
+    np.set_printoptions(formatter={'all': lambda x: '%.4f' % x})
+    result = np.array(result)
     print("best action score:")
     print(result[2])
     print("causal effect:")
     print(result[3])
+    __plot_output(result, title)
 
-# data = [[1, 1, 1, 1],
-#         [1, 0, 0, 0],
-#         [0, 0, 0, 0]]
-# print(__tabulate(data, [0, 3]))
+
+def _debug_write_example_data_file():
+    new_data = create_examples_with_prev_fluent()
+    with open(example_data_file, 'w') as f:
+        for i in range(len(new_data)):
+            for j in range(len(new_data[0])):
+                f.write('\t%d' % new_data[i][j])
+            f.write('\n')
+
+
+def _debug_learn_door_data():
+    with open(door_data_file) as fil:
+        reader = csv.reader(fil)
+        data = list(reader)
+        n_rows, n_cols = np.array(data).shape
+        new_data = [[int(x[i]) for i in range(n_cols)] for x in data]
+        print(np.array(new_data).shape)
+        result = pursuit(new_data, 40)
+        __print_result(result, 'door')
+
+
+def learning():
+    new_data = create_examples_with_prev_fluent()
+    print(np.array(new_data).shape)
+    result = pursuit(new_data, 40, [0, 1, 2, 3])
+    __print_result(result, 'c=HK-173, e=HK-92')
+
+
+learning()
+
+
 
