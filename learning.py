@@ -1,5 +1,6 @@
 from paras import *
 from create_examples import create_examples_with_prev_fluent
+from tally import make_origin_data
 import csv
 import matplotlib.pyplot as plt
 
@@ -134,7 +135,7 @@ def pursuit(data, n_iterations=20, output_types=None):
     return output
 
 
-def __plot_output(result, title):
+def __plot_output(result, title, save_file):
     _, n_iterations = np.array(result).shape
     info = result[2]
     causal_effect = result[3]
@@ -148,10 +149,11 @@ def __plot_output(result, title):
     plt.ylabel('Information Gain')
     plt.title(title)
     plt.legend()
+    plt.savefig(data_path + save_file)
     plt.show()
 
 
-def __print_result(result, title):
+def __print_result(result, title, save_file):
     print("best output:")
     print(result[0], ', len =', len(result[0]))
     print("best actions:")
@@ -162,7 +164,19 @@ def __print_result(result, title):
     print(result[2])
     print("causal effect:")
     print(result[3])
-    __plot_output(result, title)
+    __plot_output(result, title, save_file)
+    with open(result_recorder_file, 'a') as fil:
+        fil.write('======== ' + title + ' ========\n')
+        # TODO: 加上时间信息
+        fil.write('best output: ')
+        fil.write(str(result[0]))
+        fil.write('\nbest actions: ')
+        fil.write(str(result[1]))
+        fil.write('\nbest action score: ')
+        fil.write(str(result[2]))
+        fil.write('\ncausal effect: ')
+        fil.write(str(result[3]))
+        fil.write('\n\n')
 
 
 def _debug_write_example_data_file():
@@ -182,17 +196,28 @@ def _debug_learn_door_data():
         new_data = [[int(x[i]) for i in range(n_cols)] for x in data]
         print(np.array(new_data).shape)
         result = pursuit(new_data, 40)
-        __print_result(result, 'door')
+        __print_result(result, 'door', 'door.png')
 
 
-def learning():
+def learning(title, save_file):
+    # TODO: 加上time_lag， action_lag， intersect_bool参数
     new_data = create_examples_with_prev_fluent()
     print(np.array(new_data).shape)
     result = pursuit(new_data, 40, [0, 1, 2, 3])
-    __print_result(result, 'c=HK-173, e=HK-92')
+    __print_result(result, title, save_file)
 
 
-learning()
+c_ssid = "HK-173"
+e_ssid = "HK-92"
+c_thres = 30    # TODO: 调整参数
+e_thres = 120
+
+# TODO: 选取更多路口组合做实验
+make_origin_data(c_ssid, e_ssid)
+# make_origin_data(c_ssid=c_ssid, e_ssid=e_ssid, c_thres=c_thres, e_thres=e_thres)
+title = 'c='+c_ssid+', e='+e_ssid+'\nc_thres='+str(c_thres)+', e_thres='+str(e_thres)
+save_file = 'c='+c_ssid+', e='+e_ssid + '.png'
+learning(title=title, save_file=save_file)
 
 
 

@@ -144,6 +144,7 @@ def make_origin_data(c_ssid, e_ssid, c_thres=None, e_thres=None):
     """
     # TODO: 1. 可能需要考虑让Action、Fluent增加为0, 1, 2三种取值
     # TODO: 2. 考虑使用最新的VIP数据，如何更好地定义Action
+    # TODO: 3. 改进为：根据路口和拓扑（roadid_traveltime），自动生成阈值参数（现在默认是取平均值作为阈值）
 
     c_dv_dict, _ = direction_volume(c_ssid)  # cause_direction_volume_dict
     __, e_sum = direction_volume(e_ssid)  # effect_volume_sum
@@ -186,12 +187,7 @@ def make_origin_data(c_ssid, e_ssid, c_thres=None, e_thres=None):
 # roadid_traveltime()
 # print(__time_2_tag("2016/12/15 1:20:00"))
 
-c_thres = 30    # TODO: 调整参数
-e_thres = 120   # TODO: 改进为：根据路口和拓扑（roadid_traveltime），自动生成阈值参数
 
-
-# TODO: 选取更多路口组合做实验
-make_origin_data(c_ssid="HK-173", e_ssid="HK-92", c_thres=c_thres, e_thres=e_thres)
 
 
 
