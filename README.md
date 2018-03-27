@@ -22,11 +22,12 @@ tally.py：初步数据统计
 
 learning.py：分析数据，学习因果关系
 
-- create_examples_with_prev_fluent()：学习一些东西
-- pursuit()：
+- create_examples_with_prev_fluent()：从time | fluent | actions 的origin_data到“关键帧”： fluent | actions | prev_fluent
+- pursuit()：通过迭代，逐渐构建因果边
 
 
 
 存在问题：
 
 - 数据记录实时性不足：每5分钟才统计一次车流量、旅行时间，而大多数相邻路口间的车程不足5分钟。
+
