@@ -1,6 +1,6 @@
 from paras import *
 from create_examples import create_examples_with_prev_fluent
-from tally import make_origin_data
+from tally import make_origin_data, check_result
 import csv
 import matplotlib.pyplot as plt
 
@@ -59,8 +59,8 @@ def pursuit(data, n_iterations=20, output_types=None):
         h_action = tmp * 4
         stored_h[:, action_index] = np.multiply(h_fluent, h_action)
         stored_h[:, action_index] /= np.sum(stored_h[:, action_index])
-    print("stored_f: \n", stored_f)
-    print("stored_h: \n", stored_h)     # OK
+    # print("stored_f: \n", stored_f)
+    # print("stored_h: \n", stored_h)     # OK
     # PURSUIT LOOP
     for iteration in range(n_iterations):
         next_best_action = 0
@@ -125,7 +125,7 @@ def pursuit(data, n_iterations=20, output_types=None):
         tmp_sum = np.sum(stored_h[next_indices01, next_best_action])
         stored_h[next_indices01, next_best_action] *= f[1] / tmp_sum
         stored_h[:, next_best_action] /= np.sum(stored_h[:, next_best_action])
-        print('iteration =', iteration)
+        # print('iteration =', iteration)
 
     # OUTPUT
     output = [best_output, best_actions, best_action_score, causal_effect]
@@ -150,29 +150,39 @@ def __plot_output(result, title, save_file):
     plt.title(title)
     plt.legend()
     plt.savefig(data_path + save_file)
-    plt.show()
+    # plt.show()
 
 
-def __print_result(result, title, save_file):
+def __print_result(result, title, save_file, _action_names=None):
+    if _action_names is None:
+        print("action names is none!")
+        return
+    _action_names = [''] + _action_names
+    _action_names = np.array(_action_names)
+    output_str = np.array(['0->0', '1->0', '0->1', '1->1'])
+    best_output = output_str[result[0]]
     print("best output:")
-    print(result[0], ', len =', len(result[0]))
+    print(best_output, ', len =', len(result[0]))
     print("best actions:")
-    print(result[1])
+    best_actions = _action_names[result[1]]
+    print(best_actions)
     np.set_printoptions(formatter={'all': lambda x: '%.4f' % x})
     result = np.array(result)
     print("best action score:")
     print(result[2])
     print("causal effect:")
     print(result[3])
+    np.set_printoptions()   # 重置，避免写best_output到文件时出bug
     __plot_output(result, title, save_file)
     with open(result_recorder_file, 'a') as fil:
         fil.write('======== ' + title + ' ========\n')
         # TODO: 加上时间信息
         fil.write('best output: ')
-        fil.write(str(result[0]))
+        fil.write(str(best_output))
         fil.write('\nbest actions: ')
-        fil.write(str(result[1]))
+        fil.write(str(best_actions))
         fil.write('\nbest action score: ')
+        np.set_printoptions(formatter={'all': lambda x: '%.4f' % x})
         fil.write(str(result[2]))
         fil.write('\ncausal effect: ')
         fil.write(str(result[3]))
@@ -199,25 +209,31 @@ def _debug_learn_door_data():
         __print_result(result, 'door', 'door.png')
 
 
-def learning(title, save_file):
-    # TODO: 加上time_lag， action_lag， intersect_bool参数
-    new_data = create_examples_with_prev_fluent()
-    print(np.array(new_data).shape)
+def learning(title, save_file, action_names, time_lag=3, action_lag=1, intersect_bool=True):
+    new_data = create_examples_with_prev_fluent(time_lag, action_lag, intersect_bool)
+    print("example_data.shape =", np.array(new_data).shape)
     result = pursuit(new_data, 40, [0, 1, 2, 3])
-    __print_result(result, title, save_file)
+    __print_result(result, title, save_file, action_names)
 
 
 c_ssid = "HK-173"
-e_ssid = "HK-92"
-c_thres = 30    # TODO: 调整参数
-e_thres = 120
+e_ssid = "HK-83"
+# c_thres = 30    # TODO: 调整参数
+# e_thres = 120
+c_thres = None
+e_thres = None
+time_lag = 2
+action_lag = 1
+intersect_bool = True
+time_delay = 1
 
 # TODO: 选取更多路口组合做实验
-make_origin_data(c_ssid, e_ssid)
-# make_origin_data(c_ssid=c_ssid, e_ssid=e_ssid, c_thres=c_thres, e_thres=e_thres)
+c_thres, e_thres, action_names = make_origin_data(c_ssid, e_ssid, c_thres, e_thres)
 title = 'c='+c_ssid+', e='+e_ssid+'\nc_thres='+str(c_thres)+', e_thres='+str(e_thres)
 save_file = 'c='+c_ssid+', e='+e_ssid + '.png'
-learning(title=title, save_file=save_file)
+learning(title, save_file, action_names, time_lag, action_lag, intersect_bool)
 
 
+# TODO: 如何更科学地验证结果的合理性？
+# check_result(c_ssid, e_ssid, time_delay, c_thres, e_thres)
 

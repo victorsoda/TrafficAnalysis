@@ -145,6 +145,7 @@ def make_origin_data(c_ssid, e_ssid, c_thres=None, e_thres=None):
     # TODO: 1. 可能需要考虑让Action、Fluent增加为0, 1, 2三种取值
     # TODO: 2. 考虑使用最新的VIP数据，如何更好地定义Action
     # TODO: 3. 改进为：根据路口和拓扑（roadid_traveltime），自动生成阈值参数（现在默认是取平均值作为阈值）
+    # TODO: 4. 让c_ssid支持多个“因”路口。
 
     c_dv_dict, _ = direction_volume(c_ssid)  # cause_direction_volume_dict
     __, e_sum = direction_volume(e_ssid)  # effect_volume_sum
@@ -170,10 +171,13 @@ def make_origin_data(c_ssid, e_ssid, c_thres=None, e_thres=None):
             origin_data.append(line)
         last_line = line
 
+    action_names = []
     with open(origin_data_file, 'w') as f:
         header = 'Time_Tag,F_Status'
         for direction in c_dv_dict.keys():
-            header += ',' + c_ssid + '-' + direction
+            action_name = c_ssid + '-' + direction
+            action_names.append(action_name)
+            header += ',' + action_name
         header += '\n'
         f.write(header)
         for line in origin_data:
@@ -181,6 +185,39 @@ def make_origin_data(c_ssid, e_ssid, c_thres=None, e_thres=None):
             for item in line[1:]:
                 f.write(',' + str(item))
             f.write('\n')
+    return c_thres, e_thres, action_names
+
+
+def check_result(c_ssid, e_ssid, time_delay, c_thres=None, e_thres=None):
+    c_dv_dict, _ = direction_volume(c_ssid)  # cause_direction_volume_dict
+    __, e_sum = direction_volume(e_ssid)  # effect_volume_sum
+    if c_thres is None:
+        dv = []
+        for value in c_dv_dict.values():
+            dv.append(value)
+        c_thres = np.int64(np.mean(np.array(dv)) + 0.5)  # 四舍五入
+    if e_thres is None:
+        e_thres = np.int64(np.mean(np.array(e_sum)) + 0.5)
+    print('c_thres =', c_thres, '\te_thres =', e_thres, '\tcausal_time_delay =', time_delay)
+
+    print('Effect_sum_volume > e_thres: %.2f%%' %
+          (np.float64(np.sum(np.array(e_sum) > e_thres)) * 100.0 / len(e_sum)))
+
+    for direction in c_dv_dict.keys():
+        delta_f_cnt = [0] * 4   # 0: 0->0, 1: 1->0, 2: 0->1, 3: 1->1
+        delta_f = ["0->0", "1->0", "0->1", "1->1"]
+        for i in range(len(e_sum)):
+            if i < time_delay or i == len(e_sum) - 1:
+                continue
+            cause_time = i - time_delay
+            if c_dv_dict[direction][cause_time] > c_thres:
+                output_type = int(e_sum[i] > e_thres) + 2 * int(e_sum[i+1] > e_thres)
+                delta_f_cnt[output_type] += 1
+        print(direction+" 导致（"+str(TIME_SLICE*time_delay)+"分钟后）的目标路口流量：")
+        delta_f_cnt = np.array(delta_f_cnt) / np.sum(delta_f_cnt)
+        for i in range(len(delta_f_cnt)):
+            print(delta_f[i]+": %.2f%%" % (delta_f_cnt[i] * 100))
+
 
 
 # ssid_volume()
