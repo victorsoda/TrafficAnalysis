@@ -72,12 +72,11 @@ def roadid_traveltime():
             f.write('%.2f,%d,%.2f,%.2f\n' % (float(cnt)/n_road, item[0], item[1]['tt'], item[1]['dist']))
 
 
-# TODO: 2. 输入c_ssid、e_ssid，输出它们之间的time delay（平均旅行时间），需考虑多条路径的问题
-# TODO: 暂时还是返回了最短路径的用时
-def find_path_return_travel_time(c_ssid, e_ssid):
+# TODO: 10. 输入c_ssid、e_ssid，输出它们之间的time delay（平均旅行时间），需考虑多条路径的问题（暂时还是返回了最短路径的用时）
+def find_path_return_travel_time(c_ssids, e_ssid):
     """
     输入目标路口id和“因”路口id，输出两者间的旅行时间
-    :param c_ssid: “因”路口id
+    :param c_ssids: “因”路口id（可能有多个）
     :param e_ssid: 目标路口id 
     :return: 旅行时间（秒）
     """
@@ -142,8 +141,11 @@ def find_path_return_travel_time(c_ssid, e_ssid):
             current, current_distance = sorted(candidates, key=lambda x: x[1])[0]  # 找出目前可以用来松弛的点
 
         # print(visited)
-        ret = visited[c_ssid]
-        print("Time delay between "+c_ssid+" and "+e_ssid+" is "+str(ret)+"s, ("+str(int(ret/60/5))+" * 5min)")
+        ret = []
+        for c_ssid in c_ssids:
+            tt = visited[c_ssid]
+            ret.append(tt)
+            print("Time delay between "+c_ssid+" and "+e_ssid+" is "+str(tt)+"s ("+str(int(tt/60/5))+" * 5min)")
         return ret
 
 
@@ -222,12 +224,12 @@ def direction_volume(ssid, to_print='none'):
     return dir_vol_dict, vol_sum
 
 
-def make_origin_data(c_ssid, e_ssid, c_thres=None, e_thres=None):
+def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None):
     """
     生成每一行为 “time | fluent | actions” 格式的 origin_data.csv，保证相邻两行的各对应值不完全相同
-    :param c_ssid: cause_ssid，作为“因”的路口id
+    :param c_ssids: [list] cause_ssid，作为“因”的路口id（可能有多个）
     :param e_ssid: effect_ssid，作为“果”的路口id
-    :param c_thres: “因”路口单一方向车流量的阈值，大于c_thres则Action=1，否则为0
+    :param c_thres: “因”路口单一方向车流量的阈值，大于c_thres则Action=1，否则为0（可能有多个）
     :param e_thres: “果”路口总车流量的阈值，大于e_thres则Fluent=1，否则为0 
     :return: 
     """
@@ -236,14 +238,21 @@ def make_origin_data(c_ssid, e_ssid, c_thres=None, e_thres=None):
     # TODO: 3. 改进为：根据路口和拓扑（roadid_traveltime），自动生成阈值参数（现在默认是取平均值作为阈值）
     # TODO: 4. 让c_ssid支持多个“因”路口。
 
-    c_dv_dict, _ = direction_volume(c_ssid)  # cause_direction_volume_dict
+    c_dv_dicts = []
+    for c_ssid in c_ssids:
+        c_dv_dict, _ = direction_volume(c_ssid)  # cause_direction_volume_dict
+        c_dv_dicts.append(c_dv_dict)
     __, e_sum = direction_volume(e_ssid)  # effect_volume_sum
 
+    assert len(c_ssids) == len(c_dv_dicts)
+
     if c_thres is None:
-        dv = []
-        for value in c_dv_dict.values():
-            dv.append(value)
-        c_thres = np.int64(np.mean(np.array(dv)) + 0.5)  # 四舍五入
+        c_thres = []
+        for c_dv_dict in c_dv_dicts:
+            dv = []
+            for value in c_dv_dict.values():
+                dv.append(value)
+            c_thres.append(np.int64(np.mean(np.array(dv)) + 0.5))  # 四舍五入
     if e_thres is None:
         e_thres = np.int64(np.mean(np.array(e_sum)) + 0.5)
     print('c_thres =', c_thres, '\te_thres =', e_thres)
@@ -254,8 +263,10 @@ def make_origin_data(c_ssid, e_ssid, c_thres=None, e_thres=None):
         line = list()
         line.append(time_tag)
         line.append(int(e_sum[time_tag] > e_thres))
-        for direction in c_dv_dict.keys():
-            line.append(int(c_dv_dict[direction][time_tag] > c_thres))
+        for i in range(len(c_dv_dicts)):
+            c_dv_dict = c_dv_dicts[i]
+            for direction in c_dv_dict.keys():
+                line.append(int(c_dv_dict[direction][time_tag] > c_thres[i]))
         if time_tag == 0 or line[1:] != last_line[1:]:
             origin_data.append(line)
         last_line = line
@@ -263,10 +274,11 @@ def make_origin_data(c_ssid, e_ssid, c_thres=None, e_thres=None):
     action_names = []
     with open(origin_data_file, 'w') as f:
         header = 'Time_Tag,F_Status'
-        for direction in c_dv_dict.keys():
-            action_name = c_ssid + '-' + direction
-            action_names.append(action_name)
-            header += ',' + action_name
+        for i in range(len(c_ssids)):
+            for direction in c_dv_dicts[i].keys():
+                action_name = c_ssids[i] + '-' + direction
+                action_names.append(action_name)
+                header += ',' + action_name
         header += '\n'
         f.write(header)
         for line in origin_data:

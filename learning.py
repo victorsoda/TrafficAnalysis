@@ -153,7 +153,7 @@ def __plot_output(result, title, save_file):
     # plt.show()
 
 
-def __print_result(result, title, save_file, _action_names=None):
+def __print_result(result, title, save_file, time_lag, action_lag, _action_names=None):
     if _action_names is None:
         print("action names is none!")
         return
@@ -161,6 +161,7 @@ def __print_result(result, title, save_file, _action_names=None):
     _action_names = np.array(_action_names)
     output_str = np.array(['0->0', '1->0', '0->1', '1->1'])
     best_output = output_str[result[0]]
+    print("time_lag = "+str(time_lag)+", action_lag = "+str(action_lag))
     print("best output:")
     print(best_output, ', len =', len(result[0]))
     print("best actions:")
@@ -177,6 +178,7 @@ def __print_result(result, title, save_file, _action_names=None):
     with open(result_recorder_file, 'a') as fil:
         fil.write('======== ' + title + ' ========\n')
         fil.write(str(datetime.datetime.now())+'\n')    # 输出时间信息方便后续查看
+        fil.write("time_lag = "+str(time_lag)+", action_lag = "+str(action_lag))
         fil.write('best output: ')
         fil.write(str(best_output))
         fil.write('\nbest actions: ')
@@ -213,12 +215,12 @@ def learning(title, save_file, action_names, time_lag=3, action_lag=1, intersect
     new_data = create_examples_with_prev_fluent(time_lag, action_lag, intersect_bool)
     print("example_data.shape =", np.array(new_data).shape)
     result = pursuit(new_data, 40, [0, 1, 2, 3])
-    __print_result(result, title, save_file, action_names)
+    __print_result(result, title, save_file, time_lag, action_lag, action_names)
 
 
-c_ssid = "HK-173"
-e_ssid = "HK-83"
-# c_thres = 30    # TODO: 5. 【实验】调整参数
+c_ssid = ["HK-144"]
+e_ssid = "HK-105"
+# c_thres = [30]    # TODO: 5. 【实验】调整参数
 # e_thres = 120
 c_thres = None
 e_thres = None
@@ -226,13 +228,20 @@ intersect_bool = True
 
 # TODO: 6. 【实验】选取更多路口组合做实验
 # ****************** DATA PREPARATION ********************
+print("****************** DATA PREPARATION ********************")
 c_thres, e_thres, action_names = make_origin_data(c_ssid, e_ssid, c_thres, e_thres)
-time_delay = int(find_path_return_travel_time(c_ssid, e_ssid) / 60 / 5)
+travel_times = find_path_return_travel_time(c_ssid, e_ssid)
+time_delays = [int(x / 60 / 5) for x in travel_times]
+time_delay = int(np.max(time_delays))    # 取各路口 travel time 最大值来作为视频分片依据。
+print(time_delay)
+# TODO: 9. 改进算法：计算RF时，考虑利用time_delay数组来加权，delay越短的因果作用越大，是否合理？
 time_lag = time_delay + 1
 action_lag = 1  # TODO: 7. 【实验】选取更多的action_lag，尝试intersect_bool = False
-title = 'c='+c_ssid+', e='+e_ssid+'\nc_thres='+str(c_thres)+', e_thres='+str(e_thres)
-save_file = 'c='+c_ssid+', e='+e_ssid + '.png'
+
+title = 'c='+str(c_ssid)+', e='+e_ssid+'\nc_thres='+str(c_thres)+', e_thres='+str(e_thres)
+save_file = 'c='+str(c_ssid)+', e='+e_ssid + '.png'
 # ****************** LEARNING ********************
+print("****************** LEARNING ********************")
 learning(title, save_file, action_names, time_lag, action_lag, intersect_bool)
 
 
