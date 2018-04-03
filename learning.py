@@ -1,8 +1,9 @@
 from paras import *
 from create_examples import create_examples_with_prev_fluent
-from tally import make_origin_data, check_result
+from tally import make_origin_data, check_result, find_path_return_travel_time
 import csv
 import matplotlib.pyplot as plt
+import datetime
 
 
 def __tabulate(data, actions):  # 统计data（视频分片集）中每种actions组合出现的次数
@@ -74,7 +75,6 @@ def pursuit(data, n_iterations=20, output_types=None):
             indices00 = list(set(range(0, 7, 2)) ^ {indices10})
             indices01 = list(set(range(1, 8, 2)) ^ {indices11})
             for action_index in range(1, n_cols-1):     # 检查每个action和每个output type
-                # TODO: make sure we don't repeat an action/output type combo
                 is_redundant = False
                 for i in range(len(best_actions)):
                     if best_actions[i] == action_index and best_output[i] == output_type:
@@ -176,7 +176,7 @@ def __print_result(result, title, save_file, _action_names=None):
     __plot_output(result, title, save_file)
     with open(result_recorder_file, 'a') as fil:
         fil.write('======== ' + title + ' ========\n')
-        # TODO: 加上时间信息
+        fil.write(str(datetime.datetime.now())+'\n')    # 输出时间信息方便后续查看
         fil.write('best output: ')
         fil.write(str(best_output))
         fil.write('\nbest actions: ')
@@ -218,22 +218,24 @@ def learning(title, save_file, action_names, time_lag=3, action_lag=1, intersect
 
 c_ssid = "HK-173"
 e_ssid = "HK-83"
-# c_thres = 30    # TODO: 调整参数
+# c_thres = 30    # TODO: 5. 【实验】调整参数
 # e_thres = 120
 c_thres = None
 e_thres = None
-time_lag = 2
-action_lag = 1
 intersect_bool = True
-time_delay = 1
 
-# TODO: 选取更多路口组合做实验
+# TODO: 6. 【实验】选取更多路口组合做实验
+# ****************** DATA PREPARATION ********************
 c_thres, e_thres, action_names = make_origin_data(c_ssid, e_ssid, c_thres, e_thres)
+time_delay = int(find_path_return_travel_time(c_ssid, e_ssid) / 60 / 5)
+time_lag = time_delay + 1
+action_lag = 1  # TODO: 7. 【实验】选取更多的action_lag，尝试intersect_bool = False
 title = 'c='+c_ssid+', e='+e_ssid+'\nc_thres='+str(c_thres)+', e_thres='+str(e_thres)
 save_file = 'c='+c_ssid+', e='+e_ssid + '.png'
+# ****************** LEARNING ********************
 learning(title, save_file, action_names, time_lag, action_lag, intersect_bool)
 
 
-# TODO: 如何更科学地验证结果的合理性？
+# TODO: 8. 如何更科学地验证结果的合理性？
 # check_result(c_ssid, e_ssid, time_delay, c_thres, e_thres)
 

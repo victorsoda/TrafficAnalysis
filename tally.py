@@ -50,23 +50,111 @@ def roadid_traveltime():
                 road_dict[road_id]['tt'] = tt
                 road_dict[road_id]['cnt'] = 1
         for item in road_dict.items():    # cal average tt and dist
-            # print('%10d %15.2f %15.2f' % (item[0], item[1]['tt'], item[1]['dist']))
             item[1]['dist'] /= item[1]['cnt']
             item[1]['tt'] /= item[1]['cnt']
 
         n_road = len(road_dict)
-        print('Num of road =', n_road)
+        print('Num of roads =', n_road)
         road_list = sorted(road_dict.items(), key=lambda x: x[1]['tt'])
         print('%5s %10s %15s %15s' % ('rank', 'ROAD_ID', 'travel_time', 'dist'))
         cnt = 0.0
         for item in road_list:
             cnt += 1
             print('%5.2f %10d %15.2f %15.2f' % (float(cnt)/n_road, item[0], item[1]['tt'], item[1]['dist']))
+    with open(road_id_travel_time_file, 'w') as f:
+        header = ['rank', 'ROAD_ID', 'travel_time(minutes)', 'dist(?)']
+        for i in range(len(header)-1):
+            f.write(header[i] + ',')
+        f.write(header[len(header)-1]+'\n')
+        cnt = 0.0
+        for item in road_list:
+            cnt += 1
+            f.write('%.2f,%d,%.2f,%.2f\n' % (float(cnt)/n_road, item[0], item[1]['tt'], item[1]['dist']))
+
+
+# TODO: 2. 输入c_ssid、e_ssid，输出它们之间的time delay（平均旅行时间），需考虑多条路径的问题
+# TODO: 暂时还是返回了最短路径的用时
+def find_path_return_travel_time(c_ssid, e_ssid):
+    """
+    输入目标路口id和“因”路口id，输出两者间的旅行时间
+    :param c_ssid: “因”路口id
+    :param e_ssid: 目标路口id 
+    :return: 旅行时间（秒）
+    """
+    with open(road_id_travel_time_file) as f:
+        reader = csv.reader(f)
+        dat = list(reader)[1:]
+        road_tt_dict = {}
+        for line in dat:
+            road_tt_dict[line[1]] = float(line[2])
+    with open(ssid2_road_id_file) as f:
+        reader = csv.reader(f)
+        dat = list(reader)[1:]
+        distances = {}
+        for line in dat:
+            node1 = line[1]
+            node2 = line[2]
+            road_id_str = line[0]
+            road_ids = road_id_str.split('+')
+            tt = 0.0
+            for road_id in road_ids:
+                if '*' in road_id:
+                    tmp = road_id.split('*')
+                    if tmp[1] in road_tt_dict.keys():
+                        tt += float(tmp[0]) * road_tt_dict[tmp[1]]
+                    else:
+                        # print("Travel_time data of ROAD_ID "+tmp[1]+" doesn't exist.")
+                        tt = INF
+                elif road_id in road_tt_dict.keys():
+                    tt += road_tt_dict[road_id]
+                else:
+                    # print("Travel_time data of ROAD_ID " + road_id + " doesn't exist.")
+                    tt = INF
+            if tt >= INF:   # 旅行时间数据不存在的路段，寻路算法将不予考虑
+                continue
+            if node1 not in distances.keys():
+                distances[node1] = {node2: tt}
+            else:
+                distances[node1][node2] = tt
+            if node2 not in distances.keys():
+                distances[node2] = {node1: tt}
+            else:
+                distances[node2][node1] = tt
+        nodes = distances.keys()
+        unvisited = {node: None for node in nodes}  # 把None作为无穷大使用
+        visited = {}  # 用来记录已经松弛过的数组
+        current = e_ssid  # 要找目标点e_ssid到其他点的距离
+        current_distance = 0
+        unvisited[current] = current_distance  # e_ssid到自己的距离记为0
+
+        while True:
+            for neighbour, distance in distances[current].items():
+                if neighbour not in unvisited:
+                    continue  # 被访问过了，跳出本次循环
+                new_distance = current_distance + distance  # 新的距离
+                if unvisited[neighbour] is None or unvisited[neighbour] > new_distance:  # 如果两个点之间的距离之前是无穷大或者新距离小于原来的距离
+                    unvisited[neighbour] = new_distance  # 更新距离
+            visited[current] = current_distance  # 这个点已经松弛过，记录
+            del unvisited[current]  # 从未访问过的字典中将这个点删除
+            if not unvisited:
+                break  # 如果所有点都松弛过，跳出此次循环
+            candidates = [node for node in unvisited.items() if node[1]]  # 找出目前还有拿些点未松弛过
+            current, current_distance = sorted(candidates, key=lambda x: x[1])[0]  # 找出目前可以用来松弛的点
+
+        # print(visited)
+        ret = visited[c_ssid]
+        print("Time delay between "+c_ssid+" and "+e_ssid+" is "+str(ret)+"s, ("+str(int(ret/60/5))+" * 5min)")
+        return ret
 
 
 def __time_2_tag(starttime):
+    """
+    将原始数据中诸如"2016/12/15 0:15:00"的时间数据映射到每5min划分的时段（time_tag）里（如3）
+    :param starttime: 如"2016/12/15 0:15:00"
+    :return: 如 3
+    """
     hms = starttime.split(' ')
-    if len(hms) == 1:   # starttime = "2016/12/15"，表示凌晨0点
+    if len(hms) == 1:   # starttime = "2016/12/15"，表示凌晨0点，对应tag=0
         return 0
     h, m, s = hms[1].split(':')
     return int(int(h) * 12 + int(m) / 5)
@@ -79,7 +167,8 @@ def direction_volume(ssid, to_print='none'):
     :param to_print: 打印选项，'each'：各方向分别打印，'sum'：只打印各方向总和，'all'：上述都打印，'none'：都不打印
     :return: dir_vol_dict：各方向的车流量序列（字典格式）, vol_sum：各方向车流量总和的序列（列表格式）
     """
-    print("**************** SSID = " + ssid + " ****************")
+    if to_print != 'none':
+        print("**************** SSID = " + ssid + " ****************")
     dir_lane_dict = {}  # { "由东向西": [1, 2, 3, 4（车道编号）] }
     with open(lane_direction_file) as f:
         reader = csv.reader(f)
@@ -142,7 +231,7 @@ def make_origin_data(c_ssid, e_ssid, c_thres=None, e_thres=None):
     :param e_thres: “果”路口总车流量的阈值，大于e_thres则Fluent=1，否则为0 
     :return: 
     """
-    # TODO: 1. 可能需要考虑让Action、Fluent增加为0, 1, 2三种取值
+    # TODO: 1. 可能需要考虑让Action、Fluent增加为0, 1, 2三种取值，或更多——变身预测问题
     # TODO: 2. 考虑使用最新的VIP数据，如何更好地定义Action
     # TODO: 3. 改进为：根据路口和拓扑（roadid_traveltime），自动生成阈值参数（现在默认是取平均值作为阈值）
     # TODO: 4. 让c_ssid支持多个“因”路口。
@@ -219,10 +308,10 @@ def check_result(c_ssid, e_ssid, time_delay, c_thres=None, e_thres=None):
             print(delta_f[i]+": %.2f%%" % (delta_f_cnt[i] * 100))
 
 
-
 # ssid_volume()
 # roadid_traveltime()
 # print(__time_2_tag("2016/12/15 1:20:00"))
+# find_path_return_travel_time("HK-173", "HK-83")
 
 
 
