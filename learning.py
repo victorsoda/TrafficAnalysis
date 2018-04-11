@@ -113,6 +113,7 @@ def pursuit(data, n_iterations=20, output_types=None):
         # 计算causal effect：P(ΔF | do(A)) - P(ΔF | do(not A))
         f = next_best_f
         new_causal_effect = (f[3] / (f[3] + f[1]) - f[2] / (f[2] + f[0])) / (1 - f[2] / (f[2] + f[0]))
+        # new_causal_effect = f[3] / (f[3] + f[1])
         causal_effect.append(new_causal_effect)
         # 迭代结束的threshold
         if next_best_action_score < .00001:
@@ -140,8 +141,8 @@ def __plot_output(result, title, save_file):
     info = result[2]
     causal_effect = result[3]
     x = np.array(range(0, n_iterations))
-    right_sub = [i for i in range(n_iterations) if causal_effect[i] > 0.0]
-    wrong_sub = [i for i in range(n_iterations) if causal_effect[i] <= 0.0]
+    right_sub = [i for i in range(n_iterations) if causal_effect[i] > 0.0001]
+    wrong_sub = [i for i in range(n_iterations) if causal_effect[i] <= 0.0001]
     plt.plot(x, info)
     plt.plot(x[right_sub], info[right_sub], 'go', linewidth=3, markersize=10)
     plt.plot(x[wrong_sub], info[wrong_sub], 'rx', linewidth=3, markersize=10)
@@ -218,8 +219,8 @@ def learning(title, save_file, action_names, time_lag=3, action_lag=1, intersect
     __print_result(result, title, save_file, time_lag, action_lag, action_names)
 
 
-c_ssid = ["HK-144"]
-e_ssid = "HK-105"
+c_ssid = ["HK-173"]
+e_ssid = "HK-83"
 # c_thres = [30]    # TODO: 5. 【实验】调整参数
 # e_thres = 120
 c_thres = None
@@ -234,9 +235,9 @@ travel_times = find_path_return_travel_time(c_ssid, e_ssid)
 time_delays = [int(x / 60 / 5) for x in travel_times]
 time_delay = int(np.max(time_delays))    # 取各路口 travel time 最大值来作为视频分片依据。
 print(time_delay)
-# TODO: 9. 改进算法：计算RF时，考虑利用time_delay数组来加权，delay越短的因果作用越大，是否合理？
+# TODO: 9. 改进算法：计算RF时，考虑利用这个time_delays数组来加权，delay越短的因果作用越大，是否合理？
 time_lag = time_delay + 1
-action_lag = 1  # TODO: 7. 【实验】选取更多的action_lag，尝试intersect_bool = False
+action_lag = 2  # TODO: 7. 【实验】选取更多的action_lag，尝试intersect_bool = False
 
 title = 'c='+str(c_ssid)+', e='+e_ssid+'\nc_thres='+str(c_thres)+', e_thres='+str(e_thres)
 save_file = 'c='+str(c_ssid)+', e='+e_ssid + '.png'

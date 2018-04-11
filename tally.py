@@ -1,8 +1,11 @@
+# -- coding:utf-8 --
 import csv
 from paras import *
+import matplotlib.pyplot as plt
 
 n_daily_time_tag = 288     # 按5分钟划分一天的时间，可分为288个时段
 n_lanes_max = 20    # 最多不超过20个车道
+volume_cleaner = 50     # 前50个时段的车流量一般很少，可以被数据清洗掉
 
 
 def ssid_volume():
@@ -162,7 +165,35 @@ def __time_2_tag(starttime):
     return int(int(h) * 12 + int(m) / 5)
 
 
-def direction_volume(ssid, to_print='none'):
+def __direction_to_english(direction):
+    if direction == u'由西向东':
+        return 'West->East'
+    if direction == u'由东向西':
+        return 'East->West'
+    if direction == u'由南向北':
+        return 'North->South'
+    if direction == u'由北向南':
+        return 'South->North'
+    return 'Exception!!!'
+
+
+def __plot_vol_seq(dv_dict, ssid):
+    x = np.array(range(0, n_daily_time_tag))
+    colors = ['g', 'r', 'b', 'y', 'w']
+    cnt = 0
+    for direction in dv_dict.keys():
+        color = colors[cnt]
+        y = dv_dict[direction]
+        plt.plot(x, y, color, linewidth=1, markersize=3, label=__direction_to_english(direction))
+        cnt += 1
+    plt.xlabel('Time Tag of Day')
+    plt.ylabel('Volume')
+    plt.title(ssid)
+    plt.legend()
+    plt.show()
+
+
+def direction_volume(ssid, to_print='none', data_cleaning=True):
     """
     统计目标路口每5分钟内各方向的车流量。
     :param ssid: 目标路口
@@ -221,7 +252,16 @@ def direction_volume(ssid, to_print='none'):
         print("Volume Sequence: ", vol_sum)
         print("Max_vol: %5.2f%5sMin_vol: %5.2f%5sAvg_vol: %5.2f%5sMedian_vol: %5.2f" %
               (np.max(vol_sum), '', np.min(vol_sum), '', np.mean(vol_sum[excluder:]), '', np.median(vol_sum[excluder:])))
-    return dir_vol_dict, vol_sum
+    if to_print != 'none':
+        __plot_vol_seq(dir_vol_dict, ssid)  # 绘制一天流量折线图
+    if data_cleaning:
+        dv_dict = {}
+        for key in dir_vol_dict.keys():
+            dv_dict[key] = dir_vol_dict[key][volume_cleaner:]
+        v_sum = vol_sum[volume_cleaner:]
+        return dv_dict, v_sum
+    else:
+        return dir_vol_dict, vol_sum
 
 
 def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None):
@@ -234,15 +274,21 @@ def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None):
     :return: 
     """
     # TODO: 1. 可能需要考虑让Action、Fluent增加为0, 1, 2三种取值，或更多——变身预测问题
-    # TODO: 2. 考虑使用最新的VIP数据，如何更好地定义Action
+    # TODO: 2. 考虑使用最新的VIP数据，如何更好地定义Action。 【OK】已和学长讨论
     # TODO: 3. 改进为：根据路口和拓扑（roadid_traveltime），自动生成阈值参数（现在默认是取平均值作为阈值）
-    # TODO: 4. 让c_ssid支持多个“因”路口。
+    # TODO: 4. 让c_ssid支持多个“因”路口。 【OK】
+    # TODO: 11. 尝试一下两个因路口的组合（三个路口不共线）。
+    # TODO: 12. 信号灯作为挑选路口的依据（不要随便通行的）。
+    # TODO: 13. 问一下车道编号的含义。
+    # TODO: 14. 尝试一下把F变成多个方向的。
+    # TODO: 15. 尝试把阈值的“平均值”改成白天的平均值或中位数，看怎么效果更好。（数据清洗）
+    # TODO: 16. 先找一些简单的路口，可验证算法的正确性。
 
     c_dv_dicts = []
     for c_ssid in c_ssids:
         c_dv_dict, _ = direction_volume(c_ssid)  # cause_direction_volume_dict
         c_dv_dicts.append(c_dv_dict)
-    __, e_sum = direction_volume(e_ssid)  # effect_volume_sum
+    e_dv_dict, e_sum = direction_volume(e_ssid)  # effect_volume_sum
 
     assert len(c_ssids) == len(c_dv_dicts)
 
@@ -252,8 +298,11 @@ def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None):
             dv = []
             for value in c_dv_dict.values():
                 dv.append(value)
-            c_thres.append(np.int64(np.mean(np.array(dv)) + 0.5))  # 四舍五入
+            # c_thres.append(np.int64(np.mean(np.array(dv)) + 0.5))  # 平均数作为阈值，四舍五入
+            c_thres.append(np.int64(np.median(np.array(dv))))   # 中位数作为阈值
     if e_thres is None:
+        # e_thres = []
+        # for
         e_thres = np.int64(np.mean(np.array(e_sum)) + 0.5)
     print('c_thres =', c_thres, '\te_thres =', e_thres)
 
@@ -324,7 +373,7 @@ def check_result(c_ssid, e_ssid, time_delay, c_thres=None, e_thres=None):
 # roadid_traveltime()
 # print(__time_2_tag("2016/12/15 1:20:00"))
 # find_path_return_travel_time("HK-173", "HK-83")
-
+direction_volume('HK-144')
 
 
 
