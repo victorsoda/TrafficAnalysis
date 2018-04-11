@@ -1,6 +1,6 @@
 from paras import *
 from create_examples import create_examples_with_prev_fluent
-from tally import make_origin_data, check_result, find_path_return_travel_time
+from tally import make_origin_data, check_result, find_path_return_travel_time, direction_to_english
 import csv
 import matplotlib.pyplot as plt
 import datetime
@@ -132,7 +132,6 @@ def pursuit(data, n_iterations=20, output_types=None):
     output = [best_output, best_actions, best_action_score, causal_effect]
     for item in output:
         del item[0]
-
     return output
 
 
@@ -152,6 +151,7 @@ def __plot_output(result, title, save_file):
     plt.legend()
     plt.savefig(data_path + save_file)
     # plt.show()
+    plt.close('all')
 
 
 def __print_result(result, title, save_file, time_lag, action_lag, _action_names=None):
@@ -179,17 +179,18 @@ def __print_result(result, title, save_file, time_lag, action_lag, _action_names
     with open(result_recorder_file, 'a') as fil:
         fil.write('======== ' + title + ' ========\n')
         fil.write(str(datetime.datetime.now())+'\n')    # 输出时间信息方便后续查看
-        fil.write("time_lag = "+str(time_lag)+", action_lag = "+str(action_lag))
+        fil.write("time_lag = "+str(time_lag)+", action_lag = "+str(action_lag)+'\n')
         fil.write('best output: ')
         fil.write(str(best_output))
         fil.write('\nbest actions: ')
         fil.write(str(best_actions))
         fil.write('\nbest action score: ')
-        np.set_printoptions(formatter={'all': lambda x: '%.4f' % x})
+        np.set_printoptions(formatter={'all': lambda x: '%.4f' % float(x)})
         fil.write(str(result[2]))
         fil.write('\ncausal effect: ')
         fil.write(str(result[3]))
         fil.write('\n\n')
+        np.set_printoptions()
 
 
 def _debug_write_example_data_file():
@@ -212,8 +213,8 @@ def _debug_learn_door_data():
         __print_result(result, 'door', 'door.png')
 
 
-def learning(title, save_file, action_names, time_lag=3, action_lag=1, intersect_bool=True):
-    new_data = create_examples_with_prev_fluent(time_lag, action_lag, intersect_bool)
+def learning(title, save_file, action_names, time_lag=3, action_lag=1, intersect_bool=True, origin_data_number=0):
+    new_data = create_examples_with_prev_fluent(time_lag, action_lag, intersect_bool, origin_data_number)
     print("example_data.shape =", np.array(new_data).shape)
     result = pursuit(new_data, 40, [0, 1, 2, 3])
     __print_result(result, title, save_file, time_lag, action_lag, action_names)
@@ -230,7 +231,7 @@ intersect_bool = True
 # TODO: 6. 【实验】选取更多路口组合做实验
 # ****************** DATA PREPARATION ********************
 print("****************** DATA PREPARATION ********************")
-c_thres, e_thres, action_names = make_origin_data(c_ssid, e_ssid, c_thres, e_thres)
+c_thres, e_thres, action_names, e_directions = make_origin_data(c_ssid, e_ssid, c_thres, e_thres)
 travel_times = find_path_return_travel_time(c_ssid, e_ssid)
 time_delays = [int(x / 60 / 5) for x in travel_times]
 time_delay = int(np.max(time_delays))    # 取各路口 travel time 最大值来作为视频分片依据。
@@ -239,11 +240,16 @@ print(time_delay)
 time_lag = time_delay + 1
 action_lag = 2  # TODO: 7. 【实验】选取更多的action_lag，尝试intersect_bool = False
 
-title = 'c='+str(c_ssid)+', e='+e_ssid+'\nc_thres='+str(c_thres)+', e_thres='+str(e_thres)
-save_file = 'c='+str(c_ssid)+', e='+e_ssid + '.png'
 # ****************** LEARNING ********************
 print("****************** LEARNING ********************")
-learning(title, save_file, action_names, time_lag, action_lag, intersect_bool)
+for j in range(0, len(e_directions)):
+    e_direction = e_directions[j]
+    print("+++++++++++++++++ "+e_ssid+'-'+e_direction+" +++++++++++++++++")
+    title = 'c='+str(c_ssid)+', e='+e_ssid+'-'+direction_to_english(e_direction) + \
+            '\nc_thres='+str(c_thres)+', e_thres='+str(e_thres[j])
+    save_file = 'c='+str(c_ssid)+', e='+e_ssid + '-' + str(j) + '.png'
+    learning(title, save_file, action_names, time_lag, action_lag, intersect_bool, j)
+    # exit(123)
 
 
 # TODO: 8. 如何更科学地验证结果的合理性？

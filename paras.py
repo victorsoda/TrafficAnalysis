@@ -15,3 +15,4 @@ TIME_SLICE = 5   # 宣城数据集的时间分片为5分钟
 INF = 1e10
 
 pp = pprint.PrettyPrinter()
+# print(origin_data_file[:-4])

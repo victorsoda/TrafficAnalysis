@@ -42,13 +42,13 @@ def __ensure_consistency(by_lag_indices, data, fluent):
     return ret_by_lag_indices
 
 
-def create_examples_with_prev_fluent(time_lag=3, action_lag=1, intersect_bool=True):
+def create_examples_with_prev_fluent(time_lag=3, action_lag=1, intersect_bool=True, origin_data_number=0):
 
     if time_lag == 0 and action_lag == 0:
         print("ERROR: time_lag and action_lag both zero.")
         return
 
-    with open(origin_data_file) as f:
+    with open(origin_data_file[:-4]+str(origin_data_number)+'.csv') as f:
         reader = csv.reader(f)
         data = list(reader)[1:]
         n_rows, n_cols = np.array(data).shape

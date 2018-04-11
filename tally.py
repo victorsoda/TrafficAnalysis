@@ -165,7 +165,7 @@ def __time_2_tag(starttime):
     return int(int(h) * 12 + int(m) / 5)
 
 
-def __direction_to_english(direction):
+def direction_to_english(direction):
     if direction == u'由西向东':
         return 'West->East'
     if direction == u'由东向西':
@@ -184,7 +184,7 @@ def __plot_vol_seq(dv_dict, ssid):
     for direction in dv_dict.keys():
         color = colors[cnt]
         y = dv_dict[direction]
-        plt.plot(x, y, color, linewidth=1, markersize=3, label=__direction_to_english(direction))
+        plt.plot(x, y, color, linewidth=1, markersize=3, label=direction_to_english(direction))
         cnt += 1
     plt.xlabel('Time Tag of Day')
     plt.ylabel('Volume')
@@ -289,6 +289,7 @@ def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None):
         c_dv_dict, _ = direction_volume(c_ssid)  # cause_direction_volume_dict
         c_dv_dicts.append(c_dv_dict)
     e_dv_dict, e_sum = direction_volume(e_ssid)  # effect_volume_sum
+    e_directions = list(e_dv_dict.keys())
 
     assert len(c_ssids) == len(c_dv_dicts)
 
@@ -301,41 +302,47 @@ def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None):
             # c_thres.append(np.int64(np.mean(np.array(dv)) + 0.5))  # 平均数作为阈值，四舍五入
             c_thres.append(np.int64(np.median(np.array(dv))))   # 中位数作为阈值
     if e_thres is None:
-        # e_thres = []
-        # for
-        e_thres = np.int64(np.mean(np.array(e_sum)) + 0.5)
+        e_thres = []
+        for direction in e_directions:
+            e_thres.append(np.int64(np.median(np.array(e_dv_dict[direction]))))
+
     print('c_thres =', c_thres, '\te_thres =', e_thres)
-
-    origin_data = []
-    last_line = []
-    for time_tag in range(n_daily_time_tag):
-        line = list()
-        line.append(time_tag)
-        line.append(int(e_sum[time_tag] > e_thres))
-        for i in range(len(c_dv_dicts)):
-            c_dv_dict = c_dv_dicts[i]
-            for direction in c_dv_dict.keys():
-                line.append(int(c_dv_dict[direction][time_tag] > c_thres[i]))
-        if time_tag == 0 or line[1:] != last_line[1:]:
-            origin_data.append(line)
-        last_line = line
-
     action_names = []
-    with open(origin_data_file, 'w') as f:
-        header = 'Time_Tag,F_Status'
-        for i in range(len(c_ssids)):
-            for direction in c_dv_dicts[i].keys():
-                action_name = c_ssids[i] + '-' + direction
-                action_names.append(action_name)
-                header += ',' + action_name
-        header += '\n'
-        f.write(header)
-        for line in origin_data:
-            f.write(str(line[0]))
-            for item in line[1:]:
-                f.write(',' + str(item))
-            f.write('\n')
-    return c_thres, e_thres, action_names
+    for i in range(len(c_ssids)):
+        for direction in c_dv_dicts[i].keys():
+            action_name = c_ssids[i] + '-' + direction
+            action_names.append(action_name)
+    print(action_names)
+
+    for j in range(len(e_thres)):
+        e_direction = e_directions[j]
+        origin_data = []
+        last_line = []
+        for time_tag in range(n_daily_time_tag - volume_cleaner):
+            line = list()
+            line.append(time_tag+volume_cleaner)
+            line.append(int(e_dv_dict[e_direction][time_tag] > e_thres[j]))
+            for i in range(len(c_dv_dicts)):
+                c_dv_dict = c_dv_dicts[i]
+                for direction in c_dv_dict.keys():
+                    line.append(int(c_dv_dict[direction][time_tag] > c_thres[i]))
+            if time_tag == 0 or line[1:] != last_line[1:]:
+                origin_data.append(line)
+            last_line = line
+
+        with open(origin_data_file[:-4]+str(j)+'.csv', 'w') as f:
+            header = 'Time_Tag,F_Status'
+            for i in range(len(action_names)):
+                header += ',' + action_names[i]
+            header += '\n'
+            f.write(header)
+            for line in origin_data:
+                f.write(str(line[0]))
+                for item in line[1:]:
+                    f.write(',' + str(item))
+                f.write('\n')
+    # exit(11111)
+    return c_thres, e_thres, action_names, e_directions
 
 
 def check_result(c_ssid, e_ssid, time_delay, c_thres=None, e_thres=None):
@@ -373,7 +380,7 @@ def check_result(c_ssid, e_ssid, time_delay, c_thres=None, e_thres=None):
 # roadid_traveltime()
 # print(__time_2_tag("2016/12/15 1:20:00"))
 # find_path_return_travel_time("HK-173", "HK-83")
-direction_volume('HK-144')
+# direction_volume('HK-144')
 
 
 
