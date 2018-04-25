@@ -264,49 +264,67 @@ def direction_volume(ssid, to_print='none', data_cleaning=True):
         return dir_vol_dict, vol_sum
 
 
-def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None):
+def __write_origin_data(origin_data, action_names, filename):
+    with open(filename, 'w') as f:
+        header = 'Time_Tag,F_Status'
+        for i in range(len(action_names)):
+            header += ',' + action_names[i]
+        header += '\n'
+        f.write(header)
+        for line in origin_data:
+            f.write(str(line[0]))
+            for item in line[1:]:
+                f.write(',' + str(item))
+            f.write('\n')
+
+
+def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None, e_mode='sum'):
     """
     生成每一行为 “time | fluent | actions” 格式的 origin_data.csv，保证相邻两行的各对应值不完全相同
     :param c_ssids: [list] cause_ssid，作为“因”的路口id（可能有多个）
     :param e_ssid: effect_ssid，作为“果”的路口id
     :param c_thres: “因”路口单一方向车流量的阈值，大于c_thres则Action=1，否则为0（可能有多个）
     :param e_thres: “果”路口总车流量的阈值，大于e_thres则Fluent=1，否则为0 
+    :param e_mode: 'sum'表示Fluent考虑“果”路口总流量，'each'表示考虑“果”路口各方向的流量
     :return: 
     """
     # TODO: 1. 可能需要考虑让Action、Fluent增加为0, 1, 2三种取值，或更多——变身预测问题
-    # TODO: 2. 考虑使用最新的VIP数据，如何更好地定义Action。 【OK】已和学长讨论
     # TODO: 3. 改进为：根据路口和拓扑（roadid_traveltime），自动生成阈值参数（现在默认是取平均值作为阈值）
-    # TODO: 4. 让c_ssid支持多个“因”路口。 【OK】
     # TODO: 11. 尝试一下两个因路口的组合（三个路口不共线）。
     # TODO: 12. 信号灯作为挑选路口的依据（不要随便通行的）。
     # TODO: 13. 问一下车道编号的含义。
-    # TODO: 14. 尝试一下把F变成多个方向的。
-    # TODO: 15. 尝试把阈值的“平均值”改成白天的平均值或中位数，看怎么效果更好。（数据清洗）
     # TODO: 16. 先找一些简单的路口，可验证算法的正确性。
 
+    # 统计因路口、果路口各方向的车流量
     c_dv_dicts = []
     for c_ssid in c_ssids:
         c_dv_dict, _ = direction_volume(c_ssid)  # cause_direction_volume_dict
         c_dv_dicts.append(c_dv_dict)
     e_dv_dict, e_sum = direction_volume(e_ssid)  # effect_volume_sum
     e_directions = list(e_dv_dict.keys())
-
     assert len(c_ssids) == len(c_dv_dicts)
 
+    # 若未人为设定，则计算出因、果的0-1阈值
     if c_thres is None:
         c_thres = []
         for c_dv_dict in c_dv_dicts:
             dv = []
             for value in c_dv_dict.values():
                 dv.append(value)
-            # c_thres.append(np.int64(np.mean(np.array(dv)) + 0.5))  # 平均数作为阈值，四舍五入
-            c_thres.append(np.int64(np.median(np.array(dv))))   # 中位数作为阈值
+            c_thres.append(np.int64(np.mean(np.array(dv)) + 0.5))  # 平均数作为阈值，四舍五入
+            # c_thres.append(np.int64(np.median(np.array(dv))))   # 中位数作为阈值
     if e_thres is None:
-        e_thres = []
-        for direction in e_directions:
-            e_thres.append(np.int64(np.median(np.array(e_dv_dict[direction]))))
-
+        if e_mode == 'sum':
+            e_thres = np.int64(np.mean(np.array(e_sum)) + 0.5)
+            # e_thres = np.int64(np.median(np.array(e_sum)))
+        elif e_mode == 'each':
+            e_thres = []
+            for direction in e_directions:
+                c_thres.append(np.int64(np.mean(np.array(e_dv_dict[direction])) + 0.5))
+                # e_thres.append(np.int64(np.median(np.array(e_dv_dict[direction]))))
     print('c_thres =', c_thres, '\te_thres =', e_thres)
+
+    # 获取Action（A1、A2...）的名称，以便之后输出的Action能看懂
     action_names = []
     for i in range(len(c_ssids)):
         for direction in c_dv_dicts[i].keys():
@@ -314,34 +332,45 @@ def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None):
             action_names.append(action_name)
     print(action_names)
 
-    for j in range(len(e_thres)):
-        e_direction = e_directions[j]
+    # 生成origin_data文件
+    if e_mode == 'sum':
         origin_data = []
         last_line = []
         for time_tag in range(n_daily_time_tag - volume_cleaner):
             line = list()
-            line.append(time_tag+volume_cleaner)
-            line.append(int(e_dv_dict[e_direction][time_tag] > e_thres[j]))
+            line.append(time_tag + volume_cleaner)  # 第0列：Time_Tag
+            line.append(int(e_sum[time_tag] > e_thres))  # 第1列：Fluent值
             for i in range(len(c_dv_dicts)):
                 c_dv_dict = c_dv_dicts[i]
                 for direction in c_dv_dict.keys():
-                    line.append(int(c_dv_dict[direction][time_tag] > c_thres[i]))
-            if time_tag == 0 or line[1:] != last_line[1:]:
-                origin_data.append(line)
+                    line.append(int(c_dv_dict[direction][time_tag] > c_thres[i]))  # 第2~n列：Action值
+            if time_tag == 0 or line[1:] != last_line[1:]:  # 如果当前行与上一行有区别
+                origin_data.append(line)  # 则视作一个关键帧，放入origin_data中
             last_line = line
+        # 将结果写到文件中
+        filename = origin_data_file[:-4] + '.csv'
+        __write_origin_data(origin_data, action_names, filename)
 
-        with open(origin_data_file[:-4]+str(j)+'.csv', 'w') as f:
-            header = 'Time_Tag,F_Status'
-            for i in range(len(action_names)):
-                header += ',' + action_names[i]
-            header += '\n'
-            f.write(header)
-            for line in origin_data:
-                f.write(str(line[0]))
-                for item in line[1:]:
-                    f.write(',' + str(item))
-                f.write('\n')
-    # exit(11111)
+    elif e_mode == 'each':
+        for j in range(len(e_thres)):  # 若为'each'模式，则对于每个果路口方向，单独生成一个origin_data_N文件
+            e_direction = e_directions[j]
+            origin_data = []
+            last_line = []
+            for time_tag in range(n_daily_time_tag - volume_cleaner):  # 数据清洗：凌晨的数据不具代表性，舍去
+                line = list()
+                line.append(time_tag + volume_cleaner)  # 第0列：Time_Tag
+                line.append(int(e_dv_dict[e_direction][time_tag] > e_thres[j]))  # 第1列：Fluent值
+                for i in range(len(c_dv_dicts)):
+                    c_dv_dict = c_dv_dicts[i]
+                    for direction in c_dv_dict.keys():
+                        line.append(int(c_dv_dict[direction][time_tag] > c_thres[i]))  # 第2~n列：Action值
+                if time_tag == 0 or line[1:] != last_line[1:]:  # 如果当前行与上一行有区别
+                    origin_data.append(line)  # 则视作一个关键帧，放入origin_data中
+                last_line = line
+            # 将结果写到文件中
+            filename = origin_data_file[:-4] + str(j) + '.csv'
+            __write_origin_data(origin_data, action_names, filename)
+
     return c_thres, e_thres, action_names, e_directions
 
 
@@ -381,8 +410,4 @@ def check_result(c_ssid, e_ssid, time_delay, c_thres=None, e_thres=None):
 # print(__time_2_tag("2016/12/15 1:20:00"))
 # find_path_return_travel_time("HK-173", "HK-83")
 # direction_volume('HK-144')
-
-
-
-
 

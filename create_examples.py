@@ -48,7 +48,11 @@ def create_examples_with_prev_fluent(time_lag=3, action_lag=1, intersect_bool=Tr
         print("ERROR: time_lag and action_lag both zero.")
         return
 
-    with open(origin_data_file[:-4]+str(origin_data_number)+'.csv') as f:
+    filename = origin_data_file[:-4]+str(origin_data_number)+'.csv'
+    if origin_data_number == -1:    # 代表e_mode为'sum'模式
+        filename = origin_data_file
+
+    with open(filename) as f:  # 读入origin_data
         reader = csv.reader(f)
         data = list(reader)[1:]
         n_rows, n_cols = np.array(data).shape

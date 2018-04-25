@@ -213,43 +213,63 @@ def _debug_learn_door_data():
         __print_result(result, 'door', 'door.png')
 
 
-def learning(title, save_file, action_names, time_lag=3, action_lag=1, intersect_bool=True, origin_data_number=0):
+def learning(title, save_file, action_names, time_lag=3, action_lag=2, intersect_bool=True, origin_data_number=0):
+    # 【4-1】根据origin_data和分片标准*_lag、intersect_bool，对视频进行分片，得到Fluent | Actions | prev_Fluent形式的new_data
     new_data = create_examples_with_prev_fluent(time_lag, action_lag, intersect_bool, origin_data_number)
     print("example_data.shape =", np.array(new_data).shape)
+
+    # 【4-2】执行迭代算法，得到因果图结果result
     result = pursuit(new_data, 40, [0, 1, 2, 3])
+
+    # 【4-3】将结果可视化地打印出来
     __print_result(result, title, save_file, time_lag, action_lag, action_names)
 
 
 c_ssid = ["HK-173"]
 e_ssid = "HK-83"
-# c_thres = [30]    # TODO: 5. 【实验】调整参数
-# e_thres = 120
-c_thres = None
-e_thres = None
+c_thres = [23]    # TODO: 5. 【实验】调整参数
+e_thres = 93
+# c_thres = None
+# e_thres = None
 intersect_bool = True
+e_mode = 'sum'
 
 # TODO: 6. 【实验】选取更多路口组合做实验
 # ****************** DATA PREPARATION ********************
 print("****************** DATA PREPARATION ********************")
-c_thres, e_thres, action_names, e_directions = make_origin_data(c_ssid, e_ssid, c_thres, e_thres)
+
+# 【1】生成origin_data（关键帧TimeTag--Fluent(0/1)--Actions(0/1)）文件
+c_thres, e_thres, action_names, e_directions = make_origin_data(c_ssid, e_ssid, c_thres, e_thres, e_mode)
+
+# 【2】求出两个路口间的旅行时间，确定分片依据time_lag
 travel_times = find_path_return_travel_time(c_ssid, e_ssid)
 time_delays = [int(x / 60 / 5) for x in travel_times]
 time_delay = int(np.max(time_delays))    # 取各路口 travel time 最大值来作为视频分片依据。
-print(time_delay)
 # TODO: 9. 改进算法：计算RF时，考虑利用这个time_delays数组来加权，delay越短的因果作用越大，是否合理？
 time_lag = time_delay + 1
-action_lag = 2  # TODO: 7. 【实验】选取更多的action_lag，尝试intersect_bool = False
+action_lag = len(c_ssid)  # TODO: 7. 【实验】选取更多的action_lag，尝试intersect_bool = False
+
 
 # ****************** LEARNING ********************
 print("****************** LEARNING ********************")
-for j in range(0, len(e_directions)):
-    e_direction = e_directions[j]
-    print("+++++++++++++++++ "+e_ssid+'-'+e_direction+" +++++++++++++++++")
-    title = 'c='+str(c_ssid)+', e='+e_ssid+'-'+direction_to_english(e_direction) + \
-            '\nc_thres='+str(c_thres)+', e_thres='+str(e_thres[j])
-    save_file = 'c='+str(c_ssid)+', e='+e_ssid + '-' + str(j) + '.png'
-    learning(title, save_file, action_names, time_lag, action_lag, intersect_bool, j)
-    # exit(123)
+if e_mode == 'sum':
+    # 【3】设定算法结果图的标题title、存储结果的文件名save_file
+    print("+++++++++++++++++ " + e_ssid + " +++++++++++++++++")
+    title = 'c=' + str(c_ssid) + ', e=' + e_ssid + '-' + \
+            '\nc_thres=' + str(c_thres) + ', e_thres=' + str(e_thres)
+    save_file = 'c=' + str(c_ssid) + ', e=' + e_ssid + '.png'
+
+    # 【4】学习因果图
+    learning(title, save_file, action_names, time_lag, action_lag, intersect_bool, -1)
+
+elif e_mode == 'each':
+    for j in range(0, len(e_directions)):  # 若为'each'模式，则对于每个果路口方向，分别学习因果图。
+        e_direction = e_directions[j]
+        print("+++++++++++++++++ "+e_ssid+'-'+e_direction+" +++++++++++++++++")
+        title = 'c='+str(c_ssid)+', e='+e_ssid+'-'+direction_to_english(e_direction) + \
+                '\nc_thres='+str(c_thres)+', e_thres='+str(e_thres[j])
+        save_file = 'c='+str(c_ssid)+', e='+e_ssid + '-' + str(j) + '.png'
+        learning(title, save_file, action_names, time_lag, action_lag, intersect_bool, j)
 
 
 # TODO: 8. 如何更科学地验证结果的合理性？
