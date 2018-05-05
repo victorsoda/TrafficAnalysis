@@ -30,7 +30,14 @@
 # TODO: 2. 考虑使用最新的VIP数据，如何更好地定义Action。 【OK】已和学长讨论
 # TODO: 4. 让c_ssid支持多个“因”路口。 【OK】
 # TODO: 14. 尝试一下把F变成多个方向的。【OK】效果好像并不好。。
-# TODO: 15. 尝试把阈值的“平均值”改成白天的平均值或中位数，看怎么效果更好。（数据清洗）【OK】对于唯一成功的HK-173 -> HK-83，数据清洗+中位数，效果不如不清洗+平均数
+# TODO: 15. 尝试把阈值的“平均值”改成白天的平均值或中位数，看怎么效果更好。（数据清洗）【OK】
+# TODO: 18. 5min粒度粗，按照论文方法生成origin_data往往time_lag里的动作数为0，如何解决【OK】
+
+【尝试得到的结论】
+对于唯一成功的HK-173 -> HK-83，数据清洗+中位数，效果不如不清洗+平均数。
+make_origin_data时，保留所有时刻的 time_tag|fluent|actions 数据，效果很好。（可能原因：解决了“TODO:18.”的问题）
+
+create_examples非常关键，可以着重思考“到底应该如何分片更科学？”
 ```
 
 
@@ -118,9 +125,13 @@
 
 
 
+####图层的使用
 
-
-
+- 打开ArcGIS官网的Free Trial（http://www.esri.com/arcgis/trial）
+- 注册账号
+- 打开ArcGIS for Developers界面，添加新的Layer，一顿瞎设置
+- 在Dashboard / Layers 界面右边点击“Open in Mar Viewer”，进入“我的地图”界面
+- 在“我的地图”界面左上角点击：添加→从文件添加图层，即可导入文件中的“含shape文件的zip包”
 
 
 

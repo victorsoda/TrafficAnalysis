@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 n_daily_time_tag = 288     # 按5分钟划分一天的时间，可分为288个时段
 n_lanes_max = 20    # 最多不超过20个车道
-volume_cleaner = 50     # 前50个时段的车流量一般很少，可以被数据清洗掉
+volume_cleaner = 0     # 前50个时段的车流量一般很少，可以被数据清洗掉
 
 
 def ssid_volume():
@@ -294,6 +294,7 @@ def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None, e_mode='sum'):
     # TODO: 12. 信号灯作为挑选路口的依据（不要随便通行的）。
     # TODO: 13. 问一下车道编号的含义。
     # TODO: 16. 先找一些简单的路口，可验证算法的正确性。
+    # TODO: 17. create_example代码如何修改，能更符合我们的问题？
 
     # 统计因路口、果路口各方向的车流量
     c_dv_dicts = []
@@ -304,7 +305,7 @@ def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None, e_mode='sum'):
     e_directions = list(e_dv_dict.keys())
     assert len(c_ssids) == len(c_dv_dicts)
 
-    # 若未人为设定，则计算出因、果的0-1阈值
+    # 若未人为设定，则计算出因、果的0-1阈值（暂定为平均值）
     if c_thres is None:
         c_thres = []
         for c_dv_dict in c_dv_dicts:
@@ -344,8 +345,8 @@ def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None, e_mode='sum'):
                 c_dv_dict = c_dv_dicts[i]
                 for direction in c_dv_dict.keys():
                     line.append(int(c_dv_dict[direction][time_tag] > c_thres[i]))  # 第2~n列：Action值
-            if time_tag == 0 or line[1:] != last_line[1:]:  # 如果当前行与上一行有区别
-                origin_data.append(line)  # 则视作一个关键帧，放入origin_data中
+            # if time_tag == 0 or line[1:] != last_line[1:]:  # 如果当前行与上一行有区别
+            origin_data.append(line)  # 则视作一个关键帧，放入origin_data中
             last_line = line
         # 将结果写到文件中
         filename = origin_data_file[:-4] + '.csv'
