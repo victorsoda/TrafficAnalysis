@@ -56,8 +56,9 @@ def pursuit(data, n_iterations=20, output_types=None):
     if output_types is None:
         output_types = [0, 1, 2, 3]
     n_rows, n_cols = np.array(data).shape
+
     table_of_info_gains = np.zeros((n_iterations, n_cols*4+10))  # TODO: 想办法利用它打印InfoGain表格？？
-    best_actions = [1]  # 每轮迭代选出的最佳动作A_i
+    best_actions = [0]  # 每轮迭代选出的最佳动作A_i
     best_output = [0]   # A_i对应的ΔF类别：0->0为1，1->0为2，0->1为3，1->1为4
     best_action_score = [0.0]    # A_i对应的 information gain
     causal_effect = [0.0]   # 神秘的评估打分，由概率式求出。大于0表示这条因果边较为可信
@@ -76,9 +77,9 @@ def pursuit(data, n_iterations=20, output_types=None):
         h_action = tmp * 4  # [a0, a1, a0, a1, a0, a1, a0, a1]
         stored_h[:, action_index] = np.multiply(h_fluent, h_action)  # 也得到8个值：ΔF的分布与A_i的分布之乘积
         stored_h[:, action_index] /= np.sum(stored_h[:, action_index])  # 将频次归一化为频率（概率的近似）
-    print("stored_f: \n", stored_f)
-    print("stored_h: \n", stored_h)     # OK
-    exit(2233)
+    # print("stored_f: \n", stored_f)
+    # print("stored_h: \n", stored_h)     # OK
+    # exit(2233)
 
     # 【4-2-2】迭代算法，每轮迭代找出一条因果边
     for iteration in range(n_iterations):
@@ -97,6 +98,7 @@ def pursuit(data, n_iterations=20, output_types=None):
                 is_redundant = False
                 for i in range(len(best_actions)):  # 查看因果图中是否已经有这条因果边了
                     if best_actions[i] == action_index and best_output[i] == output_type:
+                    # if best_actions[i] == action_index:  # 【README：尝试2】
                         is_redundant = True  # 如果已经有了，则跳过这条边（不再重复计算）
                         break
                 if not is_redundant:  # 如果没有，则开始这条因果边的相关计算；
@@ -125,6 +127,7 @@ def pursuit(data, n_iterations=20, output_types=None):
                         next_indices11 = indices11
                         next_best_f = f  # [f00, f01, f10, f11]
         if next_best_action == 0:   # then no action was found
+            print("End iterations: when no actions were found.")
             break
         # 【4-2-3】记录选中的最佳output_type——action组合（即因果边）及其Info Gain值（Info Gain最高）
         best_output.append(next_best_output)
@@ -139,6 +142,7 @@ def pursuit(data, n_iterations=20, output_types=None):
 
         # 迭代结束的threshold
         if next_best_action_score < .00001:
+            print("End iterations: when IG < threshold.")
             break
 
         # 【4-2-5】将新的因果边加入模型，更新stored_h（对这条因果边，用真实分布的概率替代原有的模型分布概率）
@@ -254,8 +258,9 @@ def learning(title, save_file, action_names, time_lag=3, action_lag=2, intersect
     __print_result(result, title, save_file, time_lag, action_lag, action_names)
 
 
-c_ssid = ["HK-173"]
-e_ssid = "HK-83"
+c_ssid = ['HK-381', 'HK-116', 'HK-149']
+e_ssid = "HK-148"
+exclude_actions = ['HK-381-由南向北', 'HK-116-由北向南', 'HK-149-由西向东']
 # c_thres = [23]    # TODO: 5. 【实验】调整参数
 # e_thres = 93
 c_thres = None
@@ -263,12 +268,13 @@ e_thres = None
 intersect_bool = True
 e_mode = 'sum'
 
-# TODO: 6. 【实验】选取更多路口组合做实验
+
 # ****************** DATA PREPARATION ********************
 print("****************** DATA PREPARATION ********************")
 
 # 【1】生成origin_data（关键帧TimeTag--Fluent(0/1)--Actions(0/1)）文件
-c_thres, e_thres, action_names, e_directions = make_origin_data(c_ssid, e_ssid, c_thres, e_thres, e_mode)
+c_thres, e_thres, action_names, e_directions = \
+    make_origin_data(c_ssid, e_ssid, c_thres, e_thres, e_mode, exclude_actions)
 
 # 【2】求出两个路口间的旅行时间，确定分片依据time_lag
 travel_times = find_path_return_travel_time(c_ssid, e_ssid)
@@ -301,6 +307,5 @@ elif e_mode == 'each':
         learning(title, save_file, action_names, time_lag, action_lag, intersect_bool, j)
 
 
-# TODO: 8. 如何更科学地验证结果的合理性？
 # check_result(c_ssid, e_ssid, time_delay, c_thres, e_thres)
 

@@ -278,7 +278,7 @@ def __write_origin_data(origin_data, action_names, filename):
             f.write('\n')
 
 
-def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None, e_mode='sum'):
+def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None, e_mode='sum', exclude_actions=None):
     """
     生成每一行为 “time | fluent | actions” 格式的 origin_data.csv，保证相邻两行的各对应值不完全相同
     :param c_ssids: [list] cause_ssid，作为“因”的路口id（可能有多个）
@@ -286,15 +286,9 @@ def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None, e_mode='sum'):
     :param c_thres: “因”路口单一方向车流量的阈值，大于c_thres则Action=1，否则为0（可能有多个）
     :param e_thres: “果”路口总车流量的阈值，大于e_thres则Fluent=1，否则为0 
     :param e_mode: 'sum'表示Fluent考虑“果”路口总流量，'each'表示考虑“果”路口各方向的流量
+    :param exclude_actions: 动作名字的列表，表示不予考虑的动作。如["HK-173-由西向东"]
     :return: 
     """
-    # TODO: 1. 可能需要考虑让Action、Fluent增加为0, 1, 2三种取值，或更多——变身预测问题
-    # TODO: 3. 改进为：根据路口和拓扑（roadid_traveltime），自动生成阈值参数（现在默认是取平均值作为阈值）
-    # TODO: 11. 尝试一下两个因路口的组合（三个路口不共线）。
-    # TODO: 12. 信号灯作为挑选路口的依据（不要随便通行的）。
-    # TODO: 13. 问一下车道编号的含义。
-    # TODO: 16. 先找一些简单的路口，可验证算法的正确性。
-    # TODO: 17. create_example代码如何修改，能更符合我们的问题？
 
     # 统计因路口、果路口各方向的车流量
     c_dv_dicts = []
@@ -325,18 +319,22 @@ def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None, e_mode='sum'):
                 # e_thres.append(np.int64(np.median(np.array(e_dv_dict[direction]))))
     print('c_thres =', c_thres, '\te_thres =', e_thres)
 
+    if exclude_actions is None:
+        exclude_actions = []
+
     # 获取Action（A1、A2...）的名称，以便之后输出的Action能看懂
     action_names = []
     for i in range(len(c_ssids)):
         for direction in c_dv_dicts[i].keys():
             action_name = c_ssids[i] + '-' + direction
-            action_names.append(action_name)
+            if action_name not in exclude_actions:
+                action_names.append(action_name)
     print(action_names)
 
     # 生成origin_data文件
     if e_mode == 'sum':
         origin_data = []
-        last_line = []
+        # last_line = []
         for time_tag in range(n_daily_time_tag - volume_cleaner):
             line = list()
             line.append(time_tag + volume_cleaner)  # 第0列：Time_Tag
@@ -344,10 +342,12 @@ def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None, e_mode='sum'):
             for i in range(len(c_dv_dicts)):
                 c_dv_dict = c_dv_dicts[i]
                 for direction in c_dv_dict.keys():
-                    line.append(int(c_dv_dict[direction][time_tag] > c_thres[i]))  # 第2~n列：Action值
+                    action_name = c_ssids[i] + '-' + direction
+                    if action_name not in exclude_actions:
+                        line.append(int(c_dv_dict[direction][time_tag] > c_thres[i]))  # 第2~n列：Action值
             # if time_tag == 0 or line[1:] != last_line[1:]:  # 如果当前行与上一行有区别
-            origin_data.append(line)  # 则视作一个关键帧，放入origin_data中
-            last_line = line
+            origin_data.append(line)  # 则视作一个关键帧，放入origin_data中【改进：保留所有帧】
+            # last_line = line
         # 将结果写到文件中
         filename = origin_data_file[:-4] + '.csv'
         __write_origin_data(origin_data, action_names, filename)
@@ -364,7 +364,9 @@ def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None, e_mode='sum'):
                 for i in range(len(c_dv_dicts)):
                     c_dv_dict = c_dv_dicts[i]
                     for direction in c_dv_dict.keys():
-                        line.append(int(c_dv_dict[direction][time_tag] > c_thres[i]))  # 第2~n列：Action值
+                        action_name = c_ssids[i] + '-' + direction
+                        if action_name not in exclude_actions:
+                            line.append(int(c_dv_dict[direction][time_tag] > c_thres[i]))  # 第2~n列：Action值
                 if time_tag == 0 or line[1:] != last_line[1:]:  # 如果当前行与上一行有区别
                     origin_data.append(line)  # 则视作一个关键帧，放入origin_data中
                 last_line = line
@@ -410,5 +412,5 @@ def check_result(c_ssid, e_ssid, time_delay, c_thres=None, e_thres=None):
 # roadid_traveltime()
 # print(__time_2_tag("2016/12/15 1:20:00"))
 # find_path_return_travel_time("HK-173", "HK-83")
-# direction_volume('HK-144')
+# direction_volume('HK-145', to_print='all')
 
