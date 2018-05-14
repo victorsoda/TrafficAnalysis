@@ -17,5 +17,17 @@ INF = 1e10
 pp = pprint.PrettyPrinter()
 # print(origin_data_file[:-4])
 
+# a = np.zeros((8, 2))
+# print(a)
+
+# row = np.array([0, 0, 1, 1, 0])
+# print(list(row) * 4)
+# # ind = [2, 3]
+# a = {2, 3}
+# [x for x in ] += 1
+# print(row)
+# action_index = np.where(np.array(row) == 1)
+# action_index = [x + 1 for x in action_index[0]]
+# print(action_index)
 
 
