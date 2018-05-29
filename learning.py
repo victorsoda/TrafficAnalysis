@@ -1,9 +1,17 @@
+# -- coding:utf-8 --
 from paras import *
 from create_examples import create_examples_with_prev_fluent
 from tally import make_origin_data, check_result, find_path_return_travel_time, direction_to_english
 import csv
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
+from pyplotz.pyplotz import PyplotZ
+from pyplotz.pyplotz import plt
 import datetime
+from pylab import *
+mpl.rcParams['font.sans-serif'] = ['SimHei']
+mpl.rcParams['axes.unicode_minus'] = False
+pltz = PyplotZ()
+pltz.enable_chinese()
 
 
 def __tabulate(data, actions):
@@ -85,6 +93,7 @@ def pursuit(data, n_iterations=20, output_types=None, action_weights=None):
     # print("stored_h: \n", stored_h)     # OK
     # exit(2233)
 
+    # 【4-2-1】f & h 的初始化
     # TODO: 尝试加权【README尝试3.】
     h_fluent = np.zeros(8)  # [0] * 8
     h_action = np.zeros((2, n_cols))  # [[0] * (n_cols - 2)] * 2
@@ -106,7 +115,6 @@ def pursuit(data, n_iterations=20, output_types=None, action_weights=None):
             exclude_action_indices = list(all_action_indices ^ include_action_indices)
 
             # 更新 h_action
-            # TODO: 最后h_action = h_action * 4
             h_action[1][action_index] += 1
             h_action[0][exclude_action_indices] += 1
 
@@ -196,7 +204,7 @@ def pursuit(data, n_iterations=20, output_types=None, action_weights=None):
 
         # 【4-2-4】计算causal effect：P(ΔF | do(A)) - P(ΔF | do(not A))
         f = next_best_f  # 选中的因果边的真实分布的概率
-        new_causal_effect = (f[3] / (f[3] + f[1]) - f[2] / (f[2] + f[0])) / (1 - f[2] / (f[2] + f[0]))
+        new_causal_effect = (f[3] / (f[3] + f[1]) - f[2] / (f[2] + f[0]))  # / (1 - f[2] / (f[2] + f[0]))
         # new_causal_effect = f[3] / (f[3] + f[1])
         causal_effect.append(new_causal_effect)
 
@@ -225,23 +233,37 @@ def pursuit(data, n_iterations=20, output_types=None, action_weights=None):
     return output
 
 
-def __plot_output(result, title, save_file):
+def __plot_output(result, title, save_file, best_output, best_actions):
     _, n_iterations = np.array(result).shape
     info = result[2]
-    causal_effect = result[3]
+    causal_effect = [round(x, 4) for x in result[3]]
     x = np.array(range(0, n_iterations))
-    right_sub = [i for i in range(n_iterations) if causal_effect[i] > 0.0001]
-    wrong_sub = [i for i in range(n_iterations) if causal_effect[i] <= 0.0001]
-    plt.plot(x, info)
-    plt.plot(x[right_sub], info[right_sub], 'go', linewidth=3, markersize=10)
-    plt.plot(x[wrong_sub], info[wrong_sub], 'rx', linewidth=3, markersize=10)
-    plt.xlabel('Iteration Number')
-    plt.ylabel('Information Gain')
-    plt.title(title)
-    plt.legend()
+    right_sub = [i for i in range(n_iterations) if causal_effect[i] > 0.1]
+    wrong_sub = [i for i in range(n_iterations) if causal_effect[i] <= 0.1]
+    pltz.set_figure_size(12, 10)
+    pltz.plot(x, info)
+    pltz.plot(x[right_sub], info[right_sub], 'go', linewidth=3, markersize=10)
+    pltz.plot(x[wrong_sub], info[wrong_sub], 'rx', linewidth=3, markersize=10)
+    # pltz.xlabel('Iteration Number')
+    pltz.xticks([])
+    pltz.ylabel('Information Gain')
+    pltz.title(title)
+    pltz.legend()
+
+    col_labels = [str(i) for i in range(n_iterations)]
+    row_labels = ['Selected A_i', 'Selected ΔF', 'Causal Score']
+    table_vals = np.array([best_actions, best_output, causal_effect])
+
+    # row_colors = ['red', 'gold', 'green']
+
+    my_table = plt.table(cellText=table_vals, colWidths=[1 / n_iterations] * n_iterations,
+                         rowLabels=row_labels, colLabels=col_labels,
+                         colLoc='center',
+                         loc='bottom')
+    plt.subplots_adjust(left=0.2, bottom=0.2)
     plt.savefig(data_path + save_file)
-    # plt.show()
-    plt.close('all')
+    plt.show()
+    # plt.close('all')
 
 
 def __print_result(result, title, save_file, time_lag, action_lag, _action_names=None):
@@ -267,23 +289,23 @@ def __print_result(result, title, save_file, time_lag, action_lag, _action_names
     print(result[3])
     np.set_printoptions()   # 重置，避免写best_output到文件时出bug
     # 【4-3-2】画出迭代-InfoGain图
-    __plot_output(result, title, save_file)
+    __plot_output(result, title, save_file, best_output, best_actions)
     # 【4-3-3】将打印的结果存入文件，方便后续查看
-    with open(result_recorder_file, 'a') as fil:
-        fil.write('======== ' + title + ' ========\n')
-        fil.write(str(datetime.datetime.now())+'\n')    # 输出时间信息方便后续查看
-        fil.write("time_lag = "+str(time_lag)+", action_lag = "+str(action_lag)+'\n')
-        fil.write('best output: ')
-        fil.write(str(best_output))
-        fil.write('\nbest actions: ')
-        fil.write(str(best_actions))
-        fil.write('\nbest action score: ')
-        np.set_printoptions(formatter={'all': lambda x: '%.4f' % float(x)})
-        fil.write(str(result[2]))
-        fil.write('\ncausal effect: ')
-        fil.write(str(result[3]))
-        fil.write('\n\n')
-        np.set_printoptions()
+    # with open(result_recorder_file, 'a') as fil:
+    #     fil.write('======== ' + title + ' ========\n')
+    #     fil.write(str(datetime.datetime.now())+'\n')    # 输出时间信息方便后续查看
+    #     fil.write("time_lag = "+str(time_lag)+", action_lag = "+str(action_lag)+'\n')
+    #     fil.write('best output: ')
+    #     fil.write(str(best_output))
+    #     fil.write('\nbest actions: ')
+    #     fil.write(str(best_actions))
+    #     fil.write('\nbest action score: ')
+    #     np.set_printoptions(formatter={'all': lambda x: '%.4f' % float(x)})
+    #     fil.write(str(result[2]))
+    #     fil.write('\ncausal effect: ')
+    #     fil.write(str(result[3]))
+    #     fil.write('\n\n')
+    #     np.set_printoptions()
 
 
 def _debug_write_example_data_file():
@@ -319,9 +341,9 @@ def learning(title, save_file, action_names, action_weights, time_lag=3, action_
     __print_result(result, title, save_file, time_lag, action_lag, action_names)
 
 
-c_ssid = ['HK-381', 'HK-116', 'HK-149']
-e_ssid = "HK-148"
-exclude_actions = ['HK-381-由南向北', 'HK-116-由北向南', 'HK-149-由西向东']
+c_ssid = ['HK-173', 'HK-82']
+e_ssid = "HK-83"
+exclude_actions = ['HK-173由西向东', 'HK-82由北向南']
 # c_thres = [23]    # TODO: 5. 【实验】调整参数
 # e_thres = 93
 c_thres = None

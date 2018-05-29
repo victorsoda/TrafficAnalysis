@@ -326,7 +326,7 @@ def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None, e_mode='sum', 
     action_names = []
     for i in range(len(c_ssids)):
         for direction in c_dv_dicts[i].keys():
-            action_name = c_ssids[i] + '-' + direction
+            action_name = c_ssids[i] + direction
             if action_name not in exclude_actions:
                 action_names.append(action_name)
     print(action_names)
@@ -335,14 +335,14 @@ def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None, e_mode='sum', 
     if e_mode == 'sum':
         origin_data = []
         # last_line = []
-        for time_tag in range(n_daily_time_tag - volume_cleaner):
+        for time_tag in range(n_daily_time_tag - volume_cleaner):  # TODO:早高峰，晚高峰，多种时间段模式
             line = list()
             line.append(time_tag + volume_cleaner)  # 第0列：Time_Tag
             line.append(int(e_sum[time_tag] > e_thres))  # 第1列：Fluent值
             for i in range(len(c_dv_dicts)):
                 c_dv_dict = c_dv_dicts[i]
                 for direction in c_dv_dict.keys():
-                    action_name = c_ssids[i] + '-' + direction
+                    action_name = c_ssids[i] + direction
                     if action_name not in exclude_actions:
                         line.append(int(c_dv_dict[direction][time_tag] > c_thres[i]))  # 第2~n列：Action值
             # if time_tag == 0 or line[1:] != last_line[1:]:  # 如果当前行与上一行有区别
@@ -364,7 +364,7 @@ def make_origin_data(c_ssids, e_ssid, c_thres=None, e_thres=None, e_mode='sum', 
                 for i in range(len(c_dv_dicts)):
                     c_dv_dict = c_dv_dicts[i]
                     for direction in c_dv_dict.keys():
-                        action_name = c_ssids[i] + '-' + direction
+                        action_name = c_ssids[i] + direction
                         if action_name not in exclude_actions:
                             line.append(int(c_dv_dict[direction][time_tag] > c_thres[i]))  # 第2~n列：Action值
                 if time_tag == 0 or line[1:] != last_line[1:]:  # 如果当前行与上一行有区别
