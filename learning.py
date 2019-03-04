@@ -13,6 +13,8 @@ mpl.rcParams['axes.unicode_minus'] = False
 pltz = PyplotZ()
 pltz.enable_chinese()
 
+IMPROVED = False
+
 
 def __tabulate(data, actions):
     """
@@ -52,7 +54,7 @@ def calc_KL(all_f, all_h):
     return all_info
 
 
-def pursuit(data, n_iterations=20, output_types=None, action_weights=None):
+def pursuit(data, n_iterations=10, output_types=None, action_weights=None):
     """
     采用论文的迭代算法，逐步构建因果图。
     :param data: 【4-1】create_examples得到的new_data，格式为 fluent | actions | prev_fluent
@@ -164,10 +166,14 @@ def pursuit(data, n_iterations=20, output_types=None, action_weights=None):
             for action_index in range(1, n_cols-1):     # 对于每个动作A_i
                 is_redundant = False
                 for i in range(len(best_actions)):  # 查看因果图中是否已经有这条因果边了
-                    # if best_actions[i] == action_index and best_output[i] == output_type:
-                    if best_actions[i] == action_index:  # TODO:【README：尝试2】
-                        is_redundant = True  # 如果已经有了，则跳过这条边（不再重复计算）
-                        break
+                    if IMPROVED:
+                        if best_actions[i] == action_index:  # TODO:【README：尝试2】
+                            is_redundant = True  # 如果已经有了，则跳过这条边（不再重复计算）
+                            break
+                    else:
+                        if best_actions[i] == action_index and best_output[i] == output_type:
+                            is_redundant = True  # 如果已经有了，则跳过这条边（不再重复计算）
+                            break
                 if not is_redundant:  # 如果没有，则开始这条因果边的相关计算；
                     # 该动作Ai关于该output_type的真实分布f = [f00, f01, f10, f11]
                     f = stored_f[:, action_index]  # 长为8，该动作Ai对应的真实分布f（stored_f中的对应列）
@@ -251,7 +257,7 @@ def __plot_output(result, title, save_file, best_output, best_actions):
     pltz.legend()
 
     col_labels = [str(i) for i in range(n_iterations)]
-    row_labels = ['Selected A_i', 'Selected ΔF', 'Causal Score']
+    row_labels = ['Selected A_i', 'Selected ΔF', 'TE']
     table_vals = np.array([best_actions, best_output, causal_effect])
 
     # row_colors = ['red', 'gold', 'green']
@@ -335,72 +341,78 @@ def learning(title, save_file, action_names, action_weights, time_lag=3, action_
 
     # 【4-2】执行迭代算法，得到因果图结果result
     # result = pursuit(new_data, 40, [0, 1, 2, 3])
-    result = pursuit(new_data, 40, [0, 1, 2, 3], action_weights)
+    result = pursuit(new_data, 15, [0, 1, 2, 3], action_weights)
 
     # 【4-3】将结果可视化地打印出来
     __print_result(result, title, save_file, time_lag, action_lag, action_names)
 
 
-c_ssid = ['HK-173', 'HK-82']
-e_ssid = "HK-83"
-exclude_actions = ['HK-173由西向东', 'HK-82由北向南']
-# c_thres = [23]    # TODO: 5. 【实验】调整参数
-# e_thres = 93
-c_thres = None
-e_thres = None
-intersect_bool = True
-e_mode = 'sum'
+def analyze():
+    c_ssid = ['HK-173']
+    e_ssid = 'HK-83'
+    exclude_actions = []  # ['HK-95由南向北', 'HK-91由东向西']  # ['HK-173由西向东', 'HK-105由北向南', 'HK-381由南向北', 'HK-105由东向西']
+    # c_thres = [23]    # TODO: 5. 【实验】调整参数
+    # e_thres = 93
+    c_thres = None
+    e_thres = None
+    intersect_bool = True
+    e_mode = 'sum'
+
+    # ****************** DATA PREPARATION ********************
+    print("****************** DATA PREPARATION ********************")
+
+    # 【1】生成origin_data（关键帧TimeTag--Fluent(0/1)--Actions(0/1)）文件
+    c_thres, e_thres, action_names, e_directions = \
+        make_origin_data(c_ssid, e_ssid, c_thres, e_thres, e_mode, exclude_actions)
+
+    # 【2】求出两个路口间的旅行时间，确定分片依据time_lag
+    travel_times = find_path_return_travel_time(c_ssid, e_ssid)
+    action_weights_tmp = 1. / (np.array(travel_times) / np.sum(travel_times))
+    action_weights = [0]
+    for action_name in action_names:
+        for k in range(len(c_ssid)):
+            if c_ssid[k] in action_name:
+                action_weights.append(action_weights_tmp[k])
+    action_weights = np.array(action_weights) / np.min(action_weights[1:])
+    np.set_printoptions(formatter={'all': lambda x: '%.4f' % x})
+    print("Action_weights:", action_weights)
+    if not IMPROVED:
+        action_weights = np.ones(len(action_names)+1)
+        print("Action_weights:", action_weights)
+    np.set_printoptions()
+    # exit(1111)
+    time_delays = [int(x / 60 / 5) for x in travel_times]
+    time_delay = int(np.max(time_delays))    # 取各路口 travel time 最大值来作为视频分片依据。
+    # TODO: 9. 改进算法：计算RF时，考虑利用这个time_delays数组来加权，delay越短的因果作用越大，是否合理？
+    time_lag = time_delay + 1
+    action_lag = len(c_ssid)  # TODO: 7. 【实验】选取更多的action_lag，尝试intersect_bool = False
+    print("time_lag =", time_lag, ", action_lag =", action_lag)
 
 
-# ****************** DATA PREPARATION ********************
-print("****************** DATA PREPARATION ********************")
+    # ****************** LEARNING ********************
+    print("****************** LEARNING ********************")
+    if e_mode == 'sum':
+        # 【3】设定算法结果图的标题(title)、存储结果的文件名(save_file)
+        print("+++++++++++++++++ " + e_ssid + " +++++++++++++++++")
+        title = 'c=' + str(c_ssid) + ', e=' + e_ssid + '-' + \
+                '\nc_thres=' + str(c_thres) + ', e_thres=' + str(e_thres)
+        save_file = 'c=' + str(c_ssid) + ', e=' + e_ssid + '.png'
 
-# 【1】生成origin_data（关键帧TimeTag--Fluent(0/1)--Actions(0/1)）文件
-c_thres, e_thres, action_names, e_directions = \
-    make_origin_data(c_ssid, e_ssid, c_thres, e_thres, e_mode, exclude_actions)
+        # 【4】学习因果图
+        learning(title, save_file, action_names, action_weights, time_lag, action_lag, intersect_bool, -1)
 
-# 【2】求出两个路口间的旅行时间，确定分片依据time_lag
-travel_times = find_path_return_travel_time(c_ssid, e_ssid)
-action_weights_tmp = 1. / (np.array(travel_times) / np.sum(travel_times))
-action_weights = [0]
-for action_name in action_names:
-    for k in range(len(c_ssid)):
-        if c_ssid[k] in action_name:
-            action_weights.append(action_weights_tmp[k])
-action_weights = np.array(action_weights) / np.min(action_weights[1:])
-np.set_printoptions(formatter={'all': lambda x: '%.4f' % x})
-print("Action_weights:", action_weights)
-np.set_printoptions()
-# exit(1111)
-time_delays = [int(x / 60 / 5) for x in travel_times]
-time_delay = int(np.max(time_delays))    # 取各路口 travel time 最大值来作为视频分片依据。
-# TODO: 9. 改进算法：计算RF时，考虑利用这个time_delays数组来加权，delay越短的因果作用越大，是否合理？
-time_lag = time_delay + 1
-action_lag = len(c_ssid)  # TODO: 7. 【实验】选取更多的action_lag，尝试intersect_bool = False
-print("time_lag =", time_lag, ", action_lag =", action_lag)
+    elif e_mode == 'each':
+        for j in range(0, len(e_directions)):  # 若为'each'模式，则对于每个果路口方向，分别学习因果图。
+            e_direction = e_directions[j]
+            print("+++++++++++++++++ "+e_ssid+'-'+e_direction+" +++++++++++++++++")
+            title = 'c='+str(c_ssid)+', e='+e_ssid+'-'+direction_to_english(e_direction) + \
+                    '\nc_thres='+str(c_thres)+', e_thres='+str(e_thres[j])
+            save_file = 'c='+str(c_ssid)+', e='+e_ssid + '-' + str(j) + '.png'
+            learning(title, save_file, action_names, time_lag, action_lag, intersect_bool, j)
 
 
-# ****************** LEARNING ********************
-print("****************** LEARNING ********************")
-if e_mode == 'sum':
-    # 【3】设定算法结果图的标题(title)、存储结果的文件名(save_file)
-    print("+++++++++++++++++ " + e_ssid + " +++++++++++++++++")
-    title = 'c=' + str(c_ssid) + ', e=' + e_ssid + '-' + \
-            '\nc_thres=' + str(c_thres) + ', e_thres=' + str(e_thres)
-    save_file = 'c=' + str(c_ssid) + ', e=' + e_ssid + '.png'
-
-    # 【4】学习因果图
-    learning(title, save_file, action_names, action_weights, time_lag, action_lag, intersect_bool, -1)
-
-elif e_mode == 'each':
-    for j in range(0, len(e_directions)):  # 若为'each'模式，则对于每个果路口方向，分别学习因果图。
-        e_direction = e_directions[j]
-        print("+++++++++++++++++ "+e_ssid+'-'+e_direction+" +++++++++++++++++")
-        title = 'c='+str(c_ssid)+', e='+e_ssid+'-'+direction_to_english(e_direction) + \
-                '\nc_thres='+str(c_thres)+', e_thres='+str(e_thres[j])
-        save_file = 'c='+str(c_ssid)+', e='+e_ssid + '-' + str(j) + '.png'
-        learning(title, save_file, action_names, time_lag, action_lag, intersect_bool, j)
+    # check_result(c_ssid, e_ssid, time_delay, c_thres, e_thres)
 
 
-# check_result(c_ssid, e_ssid, time_delay, c_thres, e_thres)
-
+if __name__ == '__main__':
+    analyze()

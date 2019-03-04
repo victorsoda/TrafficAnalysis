@@ -206,6 +206,7 @@ def direction_volume(ssid, to_print='none', data_cleaning=True):
     with open(lane_direction_file) as f:
         reader = csv.reader(f)
         ld_dat = list(reader)[2:]
+        print(ld_dat)
         for row in ld_dat:
             if row[0] == ssid:
                 direction = row[2]
