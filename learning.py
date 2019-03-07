@@ -52,7 +52,7 @@ def calc_KL(all_f, all_h):
     return all_info
 
 
-def pursuit(data, n_iterations=20, output_types=None, action_weights=None):
+def pursuit(data, n_iterations=10, output_types=None, action_weights=None):
     """
     采用论文的迭代算法，逐步构建因果图。
     :param data: 【4-1】create_examples得到的new_data，格式为 fluent | actions | prev_fluent
@@ -164,10 +164,14 @@ def pursuit(data, n_iterations=20, output_types=None, action_weights=None):
             for action_index in range(1, n_cols-1):     # 对于每个动作A_i
                 is_redundant = False
                 for i in range(len(best_actions)):  # 查看因果图中是否已经有这条因果边了
-                    # if best_actions[i] == action_index and best_output[i] == output_type:
-                    if best_actions[i] == action_index:  # TODO:【README：尝试2】
-                        is_redundant = True  # 如果已经有了，则跳过这条边（不再重复计算）
-                        break
+                    if IMPROVED:
+                        if best_actions[i] == action_index:  # TODO:【README：尝试2】
+                            is_redundant = True  # 如果已经有了，则跳过这条边（不再重复计算）
+                            break
+                    else:
+                        if best_actions[i] == action_index and best_output[i] == output_type:
+                            is_redundant = True  # 如果已经有了，则跳过这条边（不再重复计算）
+                            break
                 if not is_redundant:  # 如果没有，则开始这条因果边的相关计算；
                     # 该动作Ai关于该output_type的真实分布f = [f00, f01, f10, f11]
                     f = stored_f[:, action_index]  # 长为8，该动作Ai对应的真实分布f（stored_f中的对应列）
@@ -251,7 +255,7 @@ def __plot_output(result, title, save_file, best_output, best_actions):
     pltz.legend()
 
     col_labels = [str(i) for i in range(n_iterations)]
-    row_labels = ['Selected A_i', 'Selected ΔF', 'Causal Score']
+    row_labels = ['Selected A_i', 'Selected ΔF', 'TE']
     table_vals = np.array([best_actions, best_output, causal_effect])
 
     # row_colors = ['red', 'gold', 'green']
@@ -335,21 +339,22 @@ def learning(title, save_file, action_names, action_weights, time_lag=3, action_
 
     # 【4-2】执行迭代算法，得到因果图结果result
     # result = pursuit(new_data, 40, [0, 1, 2, 3])
-    result = pursuit(new_data, 40, [0, 1, 2, 3], action_weights)
+    result = pursuit(new_data, 15, [0, 1, 2, 3], action_weights)
 
     # 【4-3】将结果可视化地打印出来
     __print_result(result, title, save_file, time_lag, action_lag, action_names)
 
 
-c_ssid = ['HK-173', 'HK-82']
-e_ssid = "HK-83"
-exclude_actions = ['HK-173由西向东', 'HK-82由北向南']
+c_ssid = ['HK-95','HK-91']
+e_ssid = 'HK-84'
+exclude_actions = [] #['HK-95由南向北', 'HK-91由东向西']  # ['HK-173由西向东', 'HK-105由北向南', 'HK-381由南向北', 'HK-105由东向西']
 # c_thres = [23]    # TODO: 5. 【实验】调整参数
 # e_thres = 93
 c_thres = None
 e_thres = None
 intersect_bool = True
 e_mode = 'sum'
+IMPROVED = False
 
 
 # ****************** DATA PREPARATION ********************
@@ -370,6 +375,9 @@ for action_name in action_names:
 action_weights = np.array(action_weights) / np.min(action_weights[1:])
 np.set_printoptions(formatter={'all': lambda x: '%.4f' % x})
 print("Action_weights:", action_weights)
+if not IMPROVED:
+    action_weights = np.ones(len(action_names)+1)
+    print("Action_weights:", action_weights)
 np.set_printoptions()
 # exit(1111)
 time_delays = [int(x / 60 / 5) for x in travel_times]

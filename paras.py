@@ -1,7 +1,7 @@
 import pprint
 import numpy as np
 
-data_path = 'data/'
+data_path = './data/'
 volume_file = data_path + 'volume.csv'
 travel_time_file = data_path + 'travel_time.csv'
 road_id_travel_time_file = data_path + 'road_id_travel_time.csv'
