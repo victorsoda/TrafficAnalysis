@@ -206,6 +206,7 @@ def direction_volume(ssid, to_print='none', data_cleaning=True):
     with open(lane_direction_file) as f:
         reader = csv.reader(f)
         ld_dat = list(reader)[2:]
+        print(ld_dat)
         for row in ld_dat:
             if row[0] == ssid:
                 direction = row[2]
@@ -412,5 +413,6 @@ def check_result(c_ssid, e_ssid, time_delay, c_thres=None, e_thres=None):
 # roadid_traveltime()
 # print(__time_2_tag("2016/12/15 1:20:00"))
 # find_path_return_travel_time("HK-173", "HK-83")
-# direction_volume('HK-145', to_print='all')
+
+
 
